@@ -490,6 +490,9 @@ ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 ROOMS_DIR = os.path.join(ASSETS_DIR, "rooms")
 ITEMS_DIR = os.path.join(ASSETS_DIR, "items")
 PROPS_DIR = os.path.join(ASSETS_DIR, "props")
+TITLE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "title"))
+# Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
+TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
 
 
 def try_load_png(path: str) -> Optional[pygame.Surface]:
@@ -501,6 +504,68 @@ def try_load_png(path: str) -> Optional[pygame.Surface]:
         return img.convert_alpha() if img.get_alpha() is not None else img.convert()
     except Exception:
         return None
+
+
+def scale_image_cover(src: pygame.Surface, tw: int, th: int) -> pygame.Surface:
+    """Scale uniformly to cover tw×th; crop center (no letterboxing)."""
+    iw, ih = src.get_size()
+    if iw <= 0 or ih <= 0 or tw <= 0 or th <= 0:
+        return pygame.transform.scale(src, (max(1, tw), max(1, th)))
+    scale = max(tw / iw, th / ih)
+    nw = max(1, int(iw * scale))
+    nh = max(1, int(ih * scale))
+    try:
+        scaled = pygame.transform.smoothscale(src, (nw, nh))
+        x = (nw - tw) // 2
+        y = (nh - th) // 2
+        rect = pygame.Rect(x, y, tw, th)
+        return scaled.subsurface(rect).copy()
+    except Exception:
+        return pygame.transform.smoothscale(src, (tw, th))
+
+
+def load_title_background_image() -> Optional[pygame.Surface]:
+    """Load first available title image: preferred names (any ext), then any image in assets/title/."""
+    exts = (".png", ".jpg", ".jpeg", ".webp", ".bmp")
+
+    def load_path(p: str) -> Optional[pygame.Surface]:
+        try:
+            p = os.path.normpath(p)
+            if not os.path.isfile(p):
+                return None
+            img = pygame.image.load(p)
+            # Prefer alpha-capable format so RGBA PNGs and room art don't turn into flat black/wrong pixels.
+            try:
+                return img.convert_alpha()
+            except Exception:
+                try:
+                    return img.convert()
+                except Exception:
+                    return img
+        except Exception:
+            return None
+
+    if os.path.isdir(TITLE_DIR):
+        for stem in TITLE_SCREEN_STEMS:
+            for ext in exts:
+                p = os.path.join(TITLE_DIR, stem + ext)
+                surf = load_path(p)
+                if surf is not None:
+                    return surf
+        try:
+            names = sorted(os.listdir(TITLE_DIR))
+        except OSError:
+            names = []
+        for fn in names:
+            if fn.startswith(".") or fn.lower() == ".gitkeep":
+                continue
+            low = fn.lower()
+            if not any(low.endswith(e) for e in exts):
+                continue
+            surf = load_path(os.path.join(TITLE_DIR, fn))
+            if surf is not None:
+                return surf
+    return None
 
 
 def hotspot_show_overlay(hs: Dict[str, Any]) -> bool:
@@ -1374,6 +1439,8 @@ def main() -> int:
     font_ui = pygame.font.SysFont("consolas", 16)
     font_mono = pygame.font.SysFont("consolas", 15)
     font_small = pygame.font.SysFont("consolas", 13)
+    title_fbig = pygame.font.SysFont("consolas", 44, bold=True)
+    title_fmed = pygame.font.SysFont("consolas", 24)
 
     state = default_state()
     log = ScrollLog()
@@ -1639,21 +1706,61 @@ def main() -> int:
         prompt = font_small.render("Click or press any key to continue", True, colors["warn"])
         screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 28)))
 
+    # Cache loaded title art; retry periodically if missing so files can appear without restart.
+    title_bg_cached: Optional[pygame.Surface] = None
+    title_bg_miss_cooldown: int = 0
+
+    def get_title_screen_image() -> Optional[pygame.Surface]:
+        nonlocal title_bg_cached, title_bg_miss_cooldown
+        if title_bg_cached is not None:
+            return title_bg_cached
+        if title_bg_miss_cooldown > 0:
+            title_bg_miss_cooldown -= 1
+            return None
+        surf = load_title_background_image()
+        if surf is not None:
+            title_bg_cached = surf
+            return surf
+        title_bg_miss_cooldown = 30
+        return None
+
+    title_bg_cached = load_title_background_image()
+
     def draw_title_scr() -> None:
         W, H = screen.get_size()
-        screen.fill(colors["bg"])
-        fbig = pygame.font.SysFont("consolas", 42, bold=True)
-        fmed = pygame.font.SysFont("consolas", 22)
-        t1 = fbig.render("DOOMGATE", True, colors["accent"])
-        t2 = fmed.render("THE WARLOCK'S CRUCIBLE", True, colors["text"])
-        screen.blit(t1, t1.get_rect(center=(W // 2, H // 2 - 70)))
-        screen.blit(t2, t2.get_rect(center=(W // 2, H // 2 - 30)))
-        blink = (pygame.time.get_ticks() // 600) % 2 == 0
-        if blink:
-            rip = fmed.render("Press Any Key to RIP AND TEAR!", True, colors["warn"])
-            screen.blit(rip, rip.get_rect(center=(W // 2, H // 2 + 30)))
-        sub = font_small.render("Mouse click also works · ESC quits", True, colors["muted"])
-        screen.blit(sub, sub.get_rect(center=(W // 2, H // 2 + 70)))
+        src = get_title_screen_image()
+        if src is not None:
+            screen.blit(scale_image_cover(src, W, H), (0, 0))
+        else:
+            screen.fill(colors["bg"])
+
+        rows: List[Tuple[pygame.font.Font, str, Tuple[int, int, int]]] = [
+            (title_fbig, "DOOMGATE", (240, 255, 245)),
+            (title_fmed, "THE WARLOCK'S CRUCIBLE", (210, 235, 220)),
+            (title_fmed, "Press Any Key to RIP AND TEAR!", colors["warn"]),
+            (font_small, "Mouse click also works · ESC quits", (200, 220, 210)),
+        ]
+        rendered = [f.render(t, True, c) for f, t, c in rows]
+        gaps = (10, 16, 14)
+        pad_x, pad_y = 36, 30
+        max_line_w = max(s.get_width() for s in rendered)
+        total_h = pad_y * 2 + sum(s.get_height() for s in rendered) + sum(gaps)
+        total_w = max_line_w + pad_x * 2
+        px = (W - total_w) // 2
+        py = (H - total_h) // 2
+
+        panel = pygame.Surface((total_w, total_h), pygame.SRCALPHA)
+        pr = panel.get_rect()
+        pygame.draw.rect(panel, (6, 10, 9, 200), pr, border_radius=18)
+        pygame.draw.rect(panel, (40, 58, 48, 230), pr, width=2, border_radius=18)
+        screen.blit(panel, (px, py))
+
+        y = int(py + pad_y)
+        for i, surf in enumerate(rendered):
+            x = int(px + (total_w - surf.get_width()) // 2)
+            screen.blit(surf, (x, y))
+            if i < len(gaps):
+                y += surf.get_height() + gaps[i]
 
     # Background cache per room (prefer external art) + per theme fallback
     bg_cache: Dict[Tuple[str, int, int], pygame.Surface] = {}

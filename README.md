@@ -30,6 +30,7 @@ A **title screen** appears first: press **any key** or **click** (“Press Any K
 
 ## Art assets (optional)
 
+- **Title screen (opening)**: put a wide pixel-art image in **`assets/title/`**. Recognized names (any of **`.png` `.jpg` `.jpeg` `.webp` `.bmp`**): `crucible_exterior`, `title`, or `title_screen` — e.g. **`crucible_exterior.jpg`**. Any other image file in that folder is used if the preferred names are missing. The image is scaled to fill the window with a light dim behind the text.
 - **Room backgrounds**: `assets/rooms/<roomId>.png` (e.g. `hangar.png`, `hellGateChamber.png`)
 - **Props** (for objects not drawn in the room): `assets/props/<hotspotId>.png`
 - **Inventory icons** (pickup popup + preview): `assets/items/<itemId>.png`  
