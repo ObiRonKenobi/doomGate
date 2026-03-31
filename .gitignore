@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.so
+.venv/
+venv/
+env/
+
+# Local saves (optional: remove this line if you want saves in the repo)
+savegame.json
+
+# OS / editor
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*~
