@@ -1544,8 +1544,9 @@ def main() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
-        nonlocal active_room_popup
+        nonlocal active_room_popup, active_manual_popup
         active_room_popup = None
+        active_manual_popup = None
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
@@ -1559,6 +1560,7 @@ def main() -> int:
     intro_done = False
     item_popup_queue: List[str] = []
     active_room_popup: Optional[Dict[str, Any]] = None
+    active_manual_popup: Optional[Dict[str, Any]] = None
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
@@ -1739,8 +1741,10 @@ def main() -> int:
             item_popup_queue.append(gid)
 
     def open_manual() -> None:
-        log.add("MANUAL", "title")
-        log.add(GAME["manualText"], "dim")
+        nonlocal active_manual_popup
+        if active_manual_popup is not None:
+            return
+        active_manual_popup = {"scroll": 0}
 
     def load_item_preview(item_id: str, max_side: int = 140) -> pygame.Surface:
         if item_id not in item_thumb_cache:
@@ -1785,6 +1789,52 @@ def main() -> int:
             y += body_font.get_linesize()
         prompt = font_small.render("Click or press any key to continue", True, colors["warn"])
         screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 28)))
+
+    def draw_manual_popup(popup: Dict[str, Any]) -> None:
+        W, H = screen.get_size()
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 130))
+        screen.blit(overlay, (0, 0))
+
+        panel_w = min(680, W - 60)
+        panel_h = min(420, H - 60)
+        panel = pygame.Rect((W - panel_w) // 2, (H - panel_h) // 2, panel_w, panel_h)
+
+        pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
+
+        title_s = font_mono.render("UAC FIELD MANUAL", True, colors["accent"])
+        screen.blit(title_s, (panel.x + 18, panel.y + 14))
+
+        inner = pygame.Rect(panel.x + 16, panel.y + 44, panel.w - 32, panel.h - 84)
+        pygame.draw.rect(screen, (0, 0, 0), inner)
+
+        inner_w = max(40, inner.w - 4)
+        lines: List[str] = []
+        for para in GAME["manualText"].split("\n"):
+            if para == "":
+                lines.append("")
+            else:
+                lines.extend(wrap_text_lines(font_mono, para, inner_w))
+
+        lh = font_mono.get_linesize()
+        visible = max(1, int((inner.h - 10) // lh))
+        max_scroll = max(0, len(lines) - visible)
+        scroll = clamp(int(popup.get("scroll", 0)), 0, max_scroll)
+        popup["scroll"] = scroll
+
+        y = inner.y + 6
+        for i in range(scroll, min(len(lines), scroll + visible)):
+            screen.blit(font_mono.render(lines[i], True, colors["accent"]), (inner.x + 2, y))
+            y += lh
+
+        hint = "↑↓ SCROLL  ·  CLICK OR KEY TO CLOSE"
+        if max_scroll > 0:
+            lo = scroll + 1
+            hi = min(scroll + visible, len(lines))
+            hint = f"LINES {lo}-{hi} / {len(lines)}  ·  " + hint
+        prompt = font_small.render(hint, True, colors["warn"])
+        screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 22)))
 
     def draw_room_intro_popup(popup: Dict[str, Any]) -> None:
         W, H = screen.get_size()
@@ -1915,6 +1965,7 @@ def main() -> int:
         # Activate pending room popup (first-visit flavor text)
         if (
             active_room_popup is None
+            and active_manual_popup is None
             and not title_screen
             and not item_popup_queue
             and isinstance(state.get("pendingRoomPopup"), str)
@@ -1950,6 +2001,8 @@ def main() -> int:
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
                 if active_room_popup is not None:
                     active_room_popup = None
+                elif active_manual_popup is not None:
+                    active_manual_popup = None
                 elif item_popup_queue:
                     item_popup_queue.pop(0)
                 else:
@@ -1970,6 +2023,21 @@ def main() -> int:
                         active_room_popup = None
                 else:
                     # Ignore any other events (wheel, resize handled above, etc.)
+                    pass
+            elif active_manual_popup is not None:
+                if event.type == pygame.MOUSEWHEEL:
+                    cur = int(active_manual_popup.get("scroll", 0))
+                    active_manual_popup["scroll"] = cur - event.y
+                elif event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_UP:
+                        active_manual_popup["scroll"] = int(active_manual_popup.get("scroll", 0)) - 1
+                    elif event.key == pygame.K_DOWN:
+                        active_manual_popup["scroll"] = int(active_manual_popup.get("scroll", 0)) + 1
+                    else:
+                        active_manual_popup = None
+                elif event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                    active_manual_popup = None
+                else:
                     pass
             elif item_popup_queue:
                 if event.type == pygame.KEYDOWN or (
@@ -2042,7 +2110,12 @@ def main() -> int:
                                 break
 
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
-                if not title_screen and not item_popup_queue:
+                if (
+                    not title_screen
+                    and not item_popup_queue
+                    and active_room_popup is None
+                    and active_manual_popup is None
+                ):
                     debug_hotspots = not debug_hotspots
 
         if title_screen:
@@ -2153,6 +2226,8 @@ def main() -> int:
             draw_item_acquire_popup(item_popup_queue[0])
         if active_room_popup is not None:
             draw_room_intro_popup(active_room_popup)
+        if active_manual_popup is not None:
+            draw_manual_popup(active_manual_popup)
 
         pygame.display.flip()
 
