@@ -506,6 +506,21 @@ PROPS_DIR = os.path.join(ASSETS_DIR, "props")
 TITLE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "title"))
 # Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
 TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
+# Title menu music in assets/title/ — preferred names first (extensions: .wav .ogg .mp3)
+TITLE_MUSIC_STEMS = ("title_menu", "menu", "title_music", "theme")
+
+
+def resolve_title_music_path() -> Optional[str]:
+    """First matching file under assets/title/ (see TITLE_MUSIC_STEMS)."""
+    exts = (".wav", ".ogg", ".mp3")
+    if not os.path.isdir(TITLE_DIR):
+        return None
+    for stem in TITLE_MUSIC_STEMS:
+        for ext in exts:
+            p = os.path.normpath(os.path.join(TITLE_DIR, stem + ext))
+            if os.path.isfile(p):
+                return p
+    return None
 
 
 def try_load_png(path: str) -> Optional[pygame.Surface]:
@@ -1425,7 +1440,12 @@ def compute_layout(
 
 def main() -> int:
     pygame.init()
+    try:
+        pygame.mixer.init()
+    except Exception:
+        pass
     pygame.display.set_caption(GAME["meta"]["title"])
+    title_music_path = resolve_title_music_path()
 
     screen = pygame.display.set_mode((INITIAL_WINDOW_W, INITIAL_WINDOW_H), pygame.RESIZABLE)
     clock = pygame.time.Clock()
@@ -1542,6 +1562,35 @@ def main() -> int:
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
+
+    def stop_title_menu_music() -> None:
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    def start_title_menu_music() -> None:
+        if not title_music_path:
+            return
+        try:
+            if pygame.mixer.get_init() is None:
+                pygame.mixer.init()
+            pygame.mixer.music.load(title_music_path)
+            pygame.mixer.music.play(loops=-1)
+        except Exception:
+            pass
+
+    def enter_game_from_title() -> None:
+        nonlocal title_screen, intro_done
+        stop_title_menu_music()
+        title_screen = False
+        if not intro_done:
+            intro()
+            intro_done = True
+            state["seenRooms"][state["roomId"]] = True
+            if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
+                state.setdefault("roomIntroShown", {})[state["roomId"]] = True
+                state["pendingRoomPopup"] = state["roomId"]
 
     # Utility: minimap
     def draw_box(surf: pygame.Surface, r: pygame.Rect, title: str) -> None:
@@ -1840,6 +1889,9 @@ def main() -> int:
     hovering_hotspot: Optional[str] = None
     inv_buttons: List[Tuple[str, pygame.Rect]] = []
 
+    if title_screen:
+        start_title_menu_music()
+
     running = True
     while running:
         dt_ms = clock.tick(60)
@@ -1926,23 +1978,9 @@ def main() -> int:
                     item_popup_queue.pop(0)
             elif title_screen:
                 if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    title_screen = False
-                    if not intro_done:
-                        intro()
-                        intro_done = True
-                        state["seenRooms"][state["roomId"]] = True
-                        if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
-                            state.setdefault("roomIntroShown", {})[state["roomId"]] = True
-                            state["pendingRoomPopup"] = state["roomId"]
+                    enter_game_from_title()
                 elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
-                    title_screen = False
-                    if not intro_done:
-                        intro()
-                        intro_done = True
-                        state["seenRooms"][state["roomId"]] = True
-                        if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
-                            state.setdefault("roomIntroShown", {})[state["roomId"]] = True
-                            state["pendingRoomPopup"] = state["roomId"]
+                    enter_game_from_title()
             elif event.type == pygame.MOUSEWHEEL:
                 if log_rect.collidepoint(mx, my):
                     log.wheel(event.y)
@@ -2118,6 +2156,7 @@ def main() -> int:
 
         pygame.display.flip()
 
+    stop_title_menu_music()
     pygame.quit()
     return 0
 
