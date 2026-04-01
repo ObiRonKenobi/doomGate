@@ -165,6 +165,7 @@ GAME["rooms"] = {
         "name": "Hangar Intake — The Crucible Facility",
         "theme": "hangar",
         "mapPos": [0, 2],
+        "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site—an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
         "desc": "You stand in the hangar intake of the Crucible Facility. UAC steel ribs arch overhead, but the walls are scored with runes that look like they were etched by a knife made of screaming.\n\nA flickering terminal repeats a single line: \"L.I.N.D.A. ONLINE\".\nThe air smells of ozone, blood, and corporate denial.",
         "exits": {"north": "corridor", "east": "security"},
         "hotspots": [
@@ -191,6 +192,7 @@ GAME["rooms"] = {
         "name": "Main Corridor — Steel & Sigils",
         "theme": "corridor",
         "mapPos": [1, 2],
+        "enterText": "The facility’s spine is still lit, still humming—like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
         "desc": "A long corridor of brushed metal and bad decisions. Emergency lights pulse red. Demonic glyphs crawl over the UAC logos as if mocking the concept of branding.\n\nTo the north, a blast door leads to the Research Labs. To the east, the Living Quarters stink of old fear.",
         "exits": {"south": "hangar", "north": "labsDoor", "east": "quarters"},
         "hotspots": [
@@ -215,24 +217,19 @@ GAME["rooms"] = {
         "name": "Security Checkpoint — Locked Teeth",
         "theme": "security",
         "mapPos": [0, 3],
-        "desc": "A security checkpoint with overturned chairs and a shattered glass window. A weapons locker sits behind a keypad. The keypad is smeared with something that used to have hopes.\n\nA side passage leads deeper into maintenance.",
+        "enterText": "The checkpoint tells its own story: panic, protocol, and then something stronger than both.\n\nSomeone tried to hold the line here. Someone failed. Whatever got in didn't need a keycard.",
+        "desc": "A security checkpoint with overturned chairs and a shattered glass window. The keypad panel is smeared with something that used to have hopes.\n\nA side passage leads deeper into maintenance.",
         "exits": {"west": "hangar", "east": "maintenance", "north": "armory"},
         "hotspots": [
             {"id": "toHangar", "name": "Hangar Door", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "west"}},
             {"id": "toMaint", "name": "Maintenance Passage", "rect": {"l": 76, "t": 38, "w": 18, "h": 26}, "kind": "exit", "data": {"dir": "east"}},
             {"id": "toArmory", "name": "Armory Door", "rect": {"l": 46, "t": 18, "w": 18, "h": 30}, "kind": "exit", "data": {"dir": "north"}},
-            {"id": "locker", "name": "Weapons Locker", "rect": {"l": 30, "t": 48, "w": 22, "h": 22}, "kind": "container"},
             {"id": "corpse", "name": "Security Corpse", "rect": {"l": 60, "t": 70, "w": 18, "h": 16}, "kind": "object"},
         ],
         "objects": {
             "corpse": {
                 "look": "A security officer lies face-down, still clutching a keycard like it's a favorite regret.",
                 "take": {"onceFlag": "tookRedKey", "gain": ["redKeycard"], "text": "You pry the Red Access Keycard loose. The officer doesn't object. He seems busy."},
-            },
-            "locker": {
-                "look": "A reinforced locker. The keypad glows red, as if it's embarrassed to be here.",
-                "open": {"requiresItem": "redKeycard", "onceFlag": "openedLocker", "gain": ["plasmaRifle", "beacon"], "text": "The keypad accepts the Red Keycard with a cheerful beep. Inside: a Plasma Rifle (uncharged) and an Emergency Beacon."},
-                "use": {"death": "fan", "text": "You try to 'use' the locker by kicking it. The locker wins."},
             },
         },
     },
@@ -241,6 +238,7 @@ GAME["rooms"] = {
         "name": "Maintenance Ductworks — The Belly of UAC",
         "theme": "maintenance",
         "mapPos": [1, 3],
+        "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry—drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
         "desc": "Pipes. Steam. The sound of something large breathing where no lungs should be. A broken panel reveals a power conduit pulsing with argent.\n\nA sealed hatch to the north is marked: EXCAVATION.",
         "exits": {"west": "security", "north": "excavationHatch"},
         "hotspots": [
@@ -261,6 +259,7 @@ GAME["rooms"] = {
         "name": "Research Labs — Blast Door",
         "theme": "labsDoor",
         "mapPos": [2, 2],
+        "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols—and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
         "desc": "A blast door blocks the Research Labs. A demonic seal has been painted over the keypad, like graffiti but with consequences.\n\nThe seal looks... unfinished.",
         "exits": {"south": "corridor", "north": "labs"},
         "rules": {"gateToNorthRequiresFlag": "brokeSeal"},
@@ -286,6 +285,7 @@ GAME["rooms"] = {
         "name": "Research Labs — Argent Containment",
         "theme": "labs",
         "mapPos": [3, 2],
+        "enterText": "The labs smell like antiseptic and sulfur—cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
         "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur—like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
         "exits": {"south": "labsDoor", "east": "templeLift"},
         "hotspots": [
@@ -306,6 +306,7 @@ GAME["rooms"] = {
         "name": "Living Quarters — Echoes of Payroll",
         "theme": "quarters",
         "mapPos": [2, 3],
+        "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol—over and over—like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
         "desc": "Bunks. Lockers. A poster about workplace safety that has been rewritten in blood. The intercom whispers static prayers.\n\nA cracked wall panel reveals a hidden recess.",
         "exits": {"west": "corridor", "east": "templeLift"},
         "hotspots": [
@@ -330,6 +331,7 @@ GAME["rooms"] = {
         "name": "Service Lift — Down to the Ruins",
         "theme": "lift",
         "mapPos": [3, 3],
+        "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nCrux went down. The artifacts went down. The ruin below predates Mars—and it’s awake enough to notice you.",
         "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
         "exits": {"west": "quarters", "east": "labs", "down": "excavation", "north": "hellGateAntechamber"},
         "hotspots": [
@@ -344,6 +346,7 @@ GAME["rooms"] = {
         "name": "Excavation Hatch — Sealed",
         "theme": "hatch",
         "mapPos": [2, 4],
+        "enterText": "The hatch is a boundary line—someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
         "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nA biometric lock blinks an angry red.",
         "exits": {"south": "maintenance", "north": "excavation"},
         "rules": {"gateToNorthRequiresFlag": "openedHatch"},
@@ -364,6 +367,7 @@ GAME["rooms"] = {
         "name": "Excavation Site — Temple Breach",
         "theme": "excavation",
         "mapPos": [3, 4],
+        "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link—an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
         "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
         "exits": {"south": "excavationHatch", "north": "hellGateAntechamber"},
         "hotspots": [
@@ -413,6 +417,7 @@ GAME["rooms"] = {
         "name": "Hell-Gate Antechamber — The Threshold",
         "theme": "antechamber",
         "mapPos": [4, 4],
+        "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out—it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
         "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
         "exits": {"south": "templeLift", "north": "hellGateChamber"},
         "rules": {"gateToNorthRequiresFlag": "unlockedGate"},
@@ -433,18 +438,25 @@ GAME["rooms"] = {
         "name": "Armory Annex — Old Toys",
         "theme": "armory",
         "mapPos": [1, 4],
-        "desc": "A small armory annex. Most racks are empty. One display case remains intact, holding a demonic-metal key that pulses like a living bruise.\n\nThe case has a UAC warning label: DO NOT OPEN. As if that ever worked.",
+        "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong—too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
+        "desc": "A small armory annex. Most racks are empty. A reinforced weapons locker sits behind a red-lit keypad. One display case remains intact, holding a demonic-metal key that pulses like a living bruise.\n\nThe case has a UAC warning label: DO NOT OPEN. As if that ever worked.",
         "exits": {"south": "security"},
         "hotspots": [
             {"id": "toSec", "name": "Security", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
             {"id": "case", "name": "Display Case", "rect": {"l": 52, "t": 44, "w": 18, "h": 22}, "kind": "container"},
+            {"id": "locker", "name": "Weapons Locker", "rect": {"l": 26, "t": 46, "w": 22, "h": 24}, "kind": "container"},
         ],
         "objects": {
             "case": {
                 "look": "A sealed display case. The lock is simple—because the real lock is probably the curse.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedCase", "gain": ["serpentineKey"], "text": "You pop the case. Cold air spills out. You take the Serpentine Key. The warning label silently updates to: TOLD YOU."},
                 "use": {"death": "demonTaunt", "text": "You smash the glass with your elbow. The glass explodes outward and inward. Physics is also possessed."},
-            }
+            },
+            "locker": {
+                "look": "A reinforced locker. The keypad glows red, as if it's embarrassed to be here.",
+                "open": {"requiresItem": "redKeycard", "onceFlag": "openedLocker", "gain": ["plasmaRifle", "beacon"], "text": "The keypad accepts the Red Keycard with a cheerful beep. Inside: a Plasma Rifle (uncharged) and an Emergency Beacon."},
+                "use": {"death": "fan", "text": "You try to 'use' the locker by kicking it. The locker wins."},
+            },
         },
     },
     "hellGateChamber": {
@@ -452,6 +464,7 @@ GAME["rooms"] = {
         "name": "Hell-Gate Chamber — The Crucible",
         "theme": "hellgate",
         "mapPos": [4, 3],
+        "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out—before the Titan decides you’re interesting.",
         "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity—robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
         "exits": {"south": "hellGateAntechamber"},
         "hotspots": [
@@ -630,6 +643,8 @@ def default_state() -> Dict[str, Any]:
         "cmd": "look",
         "flags": {},
         "seenRooms": {},
+        "roomIntroShown": {},
+        "pendingRoomPopup": None,
         "actions": GAME["meta"]["startActions"],
         "lanterns": GAME["meta"]["startLanterns"],
         "alive": True,
@@ -1177,11 +1192,19 @@ def move(state: Dict[str, Any], log: ScrollLog, direction: str) -> None:
         log.add("The way is blocked. Some lock—technical or infernal—still holds.", "warn")
         apply_action(state, "interact", log)
         return
+    first_time = not state.get("roomIntroShown", {}).get(target, False)
     state["roomId"] = target
     state["seenRooms"][target] = True
+    if "roomIntroShown" not in state or not isinstance(state["roomIntroShown"], dict):
+        state["roomIntroShown"] = {}
+    state["roomIntroShown"][target] = True
     apply_action(state, "move", log)
     log.add(f">> {room_def(target)['name']}", "dim")
     log.add(room_def(target)["desc"])
+    if first_time:
+        enter_text = room_def(target).get("enterText")
+        if enter_text:
+            state["pendingRoomPopup"] = target
 
 
 def resolve_object_action(
@@ -1482,6 +1505,8 @@ def main() -> int:
             base.update(loaded)
             base.setdefault("flags", {})
             base.setdefault("seenRooms", {})
+            base.setdefault("roomIntroShown", {})
+            base.setdefault("pendingRoomPopup", None)
             base.setdefault("inventory", [])
             state.clear()
             state.update(base)
@@ -1499,15 +1524,21 @@ def main() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
+        nonlocal active_room_popup
+        active_room_popup = None
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
+        if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
+            state.setdefault("roomIntroShown", {})[state["roomId"]] = True
+            state["pendingRoomPopup"] = state["roomId"]
         bg_cache.clear()
         sprite_cache.clear()
 
     title_screen = True
     intro_done = False
     item_popup_queue: List[str] = []
+    active_room_popup: Optional[Dict[str, Any]] = None
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
@@ -1706,6 +1737,44 @@ def main() -> int:
         prompt = font_small.render("Click or press any key to continue", True, colors["warn"])
         screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 28)))
 
+    def draw_room_intro_popup(popup: Dict[str, Any]) -> None:
+        W, H = screen.get_size()
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 130))
+        screen.blit(overlay, (0, 0))
+
+        room_id = popup["roomId"]
+        full_text: str = popup["text"]
+        shown: str = full_text[: int(popup.get("idx", 0))]
+
+        panel_w = min(680, W - 60)
+        panel_h = min(380, H - 60)
+        panel = pygame.Rect((W - panel_w) // 2, (H - panel_h) // 2, panel_w, panel_h)
+
+        # Terminal look: black glass + green border
+        pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
+
+        title = room_def(room_id).get("name", room_id).upper()
+        title_s = font_mono.render(title, True, colors["accent"])
+        screen.blit(title_s, (panel.x + 18, panel.y + 14))
+
+        inner = pygame.Rect(panel.x + 16, panel.y + 44, panel.w - 32, panel.h - 84)
+        pygame.draw.rect(screen, (0, 0, 0), inner)
+
+        body_font = font_mono
+        lines = wrap_text_lines(body_font, shown, inner.w - 4)
+        y = inner.y + 6
+        max_lines = max(1, int((inner.h - 10) / body_font.get_linesize()))
+        for line in lines[-max_lines:]:
+            screen.blit(body_font.render(line, True, colors["accent"]), (inner.x + 2, y))
+            y += body_font.get_linesize()
+
+        done = bool(popup.get("done", False))
+        prompt_txt = "CLICK TO CLOSE" if done else "CLICK TO SKIP"
+        prompt = font_small.render(prompt_txt, True, colors["warn"])
+        screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 22)))
+
     # Cache loaded title art; retry periodically if missing so files can appear without restart.
     title_bg_cached: Optional[pygame.Surface] = None
     title_bg_miss_cooldown: int = 0
@@ -1773,7 +1842,7 @@ def main() -> int:
 
     running = True
     while running:
-        clock.tick(60)
+        dt_ms = clock.tick(60)
         mx, my = pygame.mouse.get_pos()
         lay = compute_layout(*screen.get_size())
         layout_state.clear()
@@ -1791,6 +1860,31 @@ def main() -> int:
         manual_btn = Button(lay["manual_btn_rect"], "MANUAL", "manual")
         restart_btn = Button(lay["restart_btn_rect"], "RESTART", "restart", danger=True)
 
+        # Activate pending room popup (first-visit flavor text)
+        if (
+            active_room_popup is None
+            and not title_screen
+            and not item_popup_queue
+            and isinstance(state.get("pendingRoomPopup"), str)
+            and room_def(state["pendingRoomPopup"]).get("enterText")
+        ):
+            rid = state["pendingRoomPopup"]
+            full = room_def(rid).get("enterText", "")
+            active_room_popup = {"roomId": rid, "text": full, "idx": 0, "done": False, "acc_ms": 0}
+            state["pendingRoomPopup"] = None
+
+        # Typewriter effect update
+        if active_room_popup is not None and not active_room_popup.get("done", False):
+            active_room_popup["acc_ms"] = int(active_room_popup.get("acc_ms", 0)) + int(dt_ms)
+            cps = 45  # characters per second
+            step_ms = max(1, int(1000 / cps))
+            while active_room_popup["acc_ms"] >= step_ms and not active_room_popup.get("done", False):
+                active_room_popup["acc_ms"] -= step_ms
+                active_room_popup["idx"] = int(active_room_popup.get("idx", 0)) + 1
+                if active_room_popup["idx"] >= len(active_room_popup["text"]):
+                    active_room_popup["idx"] = len(active_room_popup["text"])
+                    active_room_popup["done"] = True
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -1802,10 +1896,29 @@ def main() -> int:
                 sprite_cache.clear()
                 bg_fallback_cache.clear()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                if item_popup_queue:
+                if active_room_popup is not None:
+                    active_room_popup = None
+                elif item_popup_queue:
                     item_popup_queue.pop(0)
                 else:
                     running = False
+            elif active_room_popup is not None:
+                # While visible: swallow all input so the room can't be interacted with.
+                if event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                    if not active_room_popup.get("done", False):
+                        active_room_popup["idx"] = len(active_room_popup["text"])
+                        active_room_popup["done"] = True
+                    else:
+                        active_room_popup = None
+                elif event.type == pygame.KEYDOWN:
+                    if not active_room_popup.get("done", False):
+                        active_room_popup["idx"] = len(active_room_popup["text"])
+                        active_room_popup["done"] = True
+                    else:
+                        active_room_popup = None
+                else:
+                    # Ignore any other events (wheel, resize handled above, etc.)
+                    pass
             elif item_popup_queue:
                 if event.type == pygame.KEYDOWN or (
                     event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1
@@ -1818,12 +1931,18 @@ def main() -> int:
                         intro()
                         intro_done = True
                         state["seenRooms"][state["roomId"]] = True
+                        if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
+                            state.setdefault("roomIntroShown", {})[state["roomId"]] = True
+                            state["pendingRoomPopup"] = state["roomId"]
                 elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
                     title_screen = False
                     if not intro_done:
                         intro()
                         intro_done = True
                         state["seenRooms"][state["roomId"]] = True
+                        if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
+                            state.setdefault("roomIntroShown", {})[state["roomId"]] = True
+                            state["pendingRoomPopup"] = state["roomId"]
             elif event.type == pygame.MOUSEWHEEL:
                 if log_rect.collidepoint(mx, my):
                     log.wheel(event.y)
@@ -1892,6 +2011,10 @@ def main() -> int:
             draw_title_scr()
             pygame.display.flip()
             continue
+
+        if active_room_popup is not None:
+            # Freeze world interaction while popup is present, but still render the room underneath.
+            pass
 
         # Draw background
         screen.fill(colors["bg"])
@@ -1990,6 +2113,8 @@ def main() -> int:
 
         if item_popup_queue:
             draw_item_acquire_popup(item_popup_queue[0])
+        if active_room_popup is not None:
+            draw_room_intro_popup(active_room_popup)
 
         pygame.display.flip()
 
