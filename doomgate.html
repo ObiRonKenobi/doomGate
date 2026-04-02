@@ -1378,20 +1378,22 @@ WIN CONDITION
     });
   }
 
+  function roomNameForStatus(name) {
+    return name.replace(/\s*[—\-]\s*THE CRUCIBLE FACILITY\s*$/i, "").trim();
+  }
+
   function renderRoom(){
     const room = roomDef(state.roomId);
     roomArt.innerHTML = svgRoom(room.art?.theme ?? "default", room.name);
     state.seenRooms[state.roomId] = true;
-    statusRoomEl.textContent = "ROOM: " + room.name.toUpperCase();
+    statusRoomEl.textContent = "ROOM: " + roomNameForStatus(room.name).toUpperCase();
   }
 
   function renderStatus(){
     heldCmdEl.textContent = (GAME.commands.find(c=>c.id===state.cmd)?.label ?? state.cmd).toUpperCase();
     heldItemEl.textContent = fmtHeldItem();
 
-    const actionsInto = state.actions % GAME.meta.actionsPerLantern;
-    const untilDrain = Math.max(0, GAME.meta.actionsPerLantern - actionsInto);
-    statusLanternEl.textContent = `PLASMA LANTERN: ${state.lanterns} (drain in ${untilDrain} action${untilDrain===1?"":"s"})`;
+    statusLanternEl.textContent = `PLASMA LANTERN: ${state.lanterns}`;
     statusActionsEl.textContent = `ACTIONS: ${state.actions}`;
 
     const threat = !state.alive ? "DEAD" : (flag("gameWon") ? "SEALED" : (state.lanterns<=1 ? "CRITICAL" : "ACTIVE"));

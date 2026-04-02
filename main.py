@@ -1,5 +1,7 @@
 import json
+import math
 import os
+import re
 import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
@@ -503,6 +505,7 @@ ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 ROOMS_DIR = os.path.join(ASSETS_DIR, "rooms")
 ITEMS_DIR = os.path.join(ASSETS_DIR, "items")
 PROPS_DIR = os.path.join(ASSETS_DIR, "props")
+UI_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "ui"))
 TITLE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "title"))
 # Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
 TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
@@ -521,6 +524,195 @@ def resolve_title_music_path() -> Optional[str]:
             if os.path.isfile(p):
                 return p
     return None
+
+
+def load_ui_player_face_frames() -> List[pygame.Surface]:
+    """Optional PNG sequence: assets/ui/player_face_00.png … (sorted by name)."""
+    if not os.path.isdir(UI_DIR):
+        return []
+    names = sorted(
+        fn
+        for fn in os.listdir(UI_DIR)
+        if fn.lower().startswith("player_face") and fn.lower().endswith(".png")
+    )
+    out: List[pygame.Surface] = []
+    for fn in names:
+        surf = try_load_png(os.path.join(UI_DIR, fn))
+        if surf is not None:
+            out.append(surf)
+    return out
+
+
+def load_plasma_orb_decor() -> Optional[pygame.Surface]:
+    """Optional frame/glass overlay for the lantern orb (used only if sprite frames missing)."""
+    for name in ("plasma_orb_decor.png", "plasma_lantern_decor.png"):
+        p = os.path.join(UI_DIR, name)
+        s = try_load_png(p)
+        if s is not None:
+            return s
+    return None
+
+
+# Discrete HUD sprites: assets/ui/plasma_orb_{0,10,...,100}.png (see docstring on load_plasma_orb_frames).
+PLASMA_ORB_LEVELS: Tuple[int, ...] = tuple(range(0, 101, 10))
+
+
+def load_plasma_orb_frames() -> Dict[int, Optional[pygame.Surface]]:
+    """Load 11 PNGs: plasma_orb_100.png … plasma_orb_0.png (10% steps). Missing files stay None."""
+    out: Dict[int, Optional[pygame.Surface]] = {}
+    for pct in PLASMA_ORB_LEVELS:
+        p = os.path.join(UI_DIR, f"plasma_orb_{pct}.png")
+        out[pct] = try_load_png(p)
+    return out
+
+
+def plasma_percent_bucket(fill01: float) -> int:
+    """Map continuous 0..1 charge to display tier 0,10,…,100 for sprite selection."""
+    f = float(clamp(int(fill01 * 1000), 0, 1000)) / 1000.0
+    step = int(round(f * 10.0)) * 10
+    return clamp(step, 0, 100)
+
+
+def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
+    """(lx, ly, r) left plasma, (rx, ry, r) right face — hug bottom + outer edges of the room viewport (UI chrome)."""
+    vw, vh = viewport_rect.w, viewport_rect.h
+    r = int(min(vw, vh) * 0.15)
+    r = clamp(r, 34, min(vw, vh) // 2 - 4)
+    # Circles sit on the bottom edge and tuck against left / right viewport edges (extension of the frame UI)
+    margin_x = 3
+    margin_bottom = 2
+    ly = viewport_rect.bottom - r - margin_bottom
+    lx = viewport_rect.left + r + margin_x
+    rx = viewport_rect.right - r - margin_x
+    return (lx, ly, r), (rx, ly, r)
+
+
+def plasma_charge_fraction(state: Dict[str, Any]) -> float:
+    """Overall remaining 'lantern energy' 0..1 for the orb fill."""
+    ap = GAME["meta"]["actionsPerLantern"]
+    start = GAME["meta"]["startLanterns"]
+    max_e = start * ap
+    if max_e <= 0 or state["lanterns"] <= 0:
+        return 0.0
+    seg = state["actions"] % ap
+    total = state["lanterns"] * ap - seg
+    return float(clamp(total, 0, max_e)) / float(max_e)
+
+
+def player_face_frame_index(state: Dict[str, Any]) -> int:
+    """Pick sprite index for status portrait (0=good … higher=worse)."""
+    if get_flag(state, "gameWon"):
+        return 0
+    if not state["alive"]:
+        return 5
+    ap = GAME["meta"]["actionsPerLantern"]
+    ud = max(0, ap - (state["actions"] % ap))
+    if state["lanterns"] <= 1 and state["alive"]:
+        if state["lanterns"] == 0:
+            return 5
+        if ud <= ap // 3:
+            return 4
+        return 3
+    if state["lanterns"] == 2 and ud <= ap // 4:
+        return 2
+    return 1 if state["lanterns"] <= 2 else 0
+
+
+def _fill_circle_from_bottom(
+    target: pygame.Surface, cx: int, cy: int, r: int, fill01: float, rgb: Tuple[int, int, int]
+) -> None:
+    fill01 = float(clamp(int(fill01 * 1000), 0, 1000)) / 1000.0
+    if fill01 <= 0:
+        return
+    y_end = cy + r
+    y_start = cy + r - int(2 * r * fill01) - 1
+    for y in range(y_start, y_end + 1):
+        dy = y - cy
+        if abs(dy) > r:
+            continue
+        half = int(math.sqrt(max(0, r * r - dy * dy)))
+        pygame.draw.line(target, rgb, (cx - half, y), (cx + half, y))
+
+
+def draw_plasma_lantern_meter(
+    screen: pygame.Surface,
+    cx: int,
+    cy: int,
+    r: int,
+    fill01: float,
+    frames: Dict[int, Optional[pygame.Surface]],
+    decor: Optional[pygame.Surface],
+    colors: Dict[str, Any],
+) -> None:
+    pct = plasma_percent_bucket(fill01)
+    surf = frames.get(pct) if frames else None
+    if surf is not None:
+        side = max(32, int(r * 2) + 4)
+        scaled = pygame.transform.scale(surf, (side, side))
+        screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
+        return
+    # Fallback: procedural fill + optional decor (no art assets yet)
+    pygame.draw.circle(screen, (12, 18, 14), (cx, cy), r + 2)
+    pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
+    pygame.draw.circle(screen, (4, 8, 6), (cx, cy), r)
+    inner = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
+    ix, iy = r + 2, r + 2
+    tier01 = pct / 100.0
+    _fill_circle_from_bottom(inner, ix, iy, r - 2, tier01, colors["accent"])
+    screen.blit(inner, (cx - ix, cy - iy))
+    pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
+    if decor is not None:
+        dw = min(r * 2 + 8, decor.get_width())
+        dh = min(r * 2 + 8, decor.get_height())
+        d = pygame.transform.smoothscale(decor, (dw, dh))
+        screen.blit(d, d.get_rect(center=(cx, cy)))
+
+
+def draw_player_status_meter(
+    screen: pygame.Surface,
+    cx: int,
+    cy: int,
+    r: int,
+    frame_idx: int,
+    frames: List[pygame.Surface],
+    colors: Dict[str, Any],
+) -> None:
+    pygame.draw.circle(screen, (14, 18, 16), (cx, cy), r + 2)
+    pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
+    if frames:
+        img = frames[frame_idx % len(frames)]
+        side = min(r * 2, max(32, int(r * 1.85)))
+        scaled = pygame.transform.smoothscale(img, (side, side))
+        screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
+    else:
+        # Placeholder Doom-style mug until PNGs exist
+        pygame.draw.circle(screen, (90, 72, 58), (cx, cy), r - 2)
+        eye = (255, 220, 200)
+        pygame.draw.circle(screen, eye, (cx - r // 3, cy - r // 8), max(3, r // 10))
+        pygame.draw.circle(screen, eye, (cx + r // 3, cy - r // 8), max(3, r // 10))
+        mouth_h = clamp(r // 4 + frame_idx * 2, 2, r // 2)
+        pygame.draw.arc(screen, (40, 28, 24), pygame.Rect(cx - r // 2, cy, r, mouth_h), math.pi * 0.1, math.pi * 0.9, 2)
+    pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
+
+
+def draw_viewport_corner_meters(
+    screen: pygame.Surface,
+    lx: int,
+    ly: int,
+    rl: int,
+    rx: int,
+    ry: int,
+    rr: int,
+    state: Dict[str, Any],
+    colors: Dict[str, Any],
+    face_frames: List[pygame.Surface],
+    plasma_frames: Dict[int, Optional[pygame.Surface]],
+    plasma_decor: Optional[pygame.Surface],
+) -> None:
+    fill = plasma_charge_fraction(state)
+    draw_plasma_lantern_meter(screen, lx, ly, rl, fill, plasma_frames, plasma_decor, colors)
+    fidx = player_face_frame_index(state)
+    draw_player_status_meter(screen, rx, ry, rr, fidx, face_frames, colors)
 
 
 def try_load_png(path: str) -> Optional[pygame.Surface]:
@@ -643,6 +835,37 @@ def wrap_text_lines(font: pygame.font.Font, text: str, max_width: int) -> List[s
     if cur:
         lines.append(cur)
     return lines
+
+
+# Strip redundant facility subtitle; plasma orb shows drain in the viewport meter.
+_STATUS_FACILITY_SUFFIX = re.compile(r"\s*[—\-]\s*THE CRUCIBLE FACILITY\s*$", re.IGNORECASE)
+
+
+def room_name_for_status_bar(room_name: str) -> str:
+    return _STATUS_FACILITY_SUFFIX.sub("", room_name.strip()).strip()
+
+
+def truncate_after_prefix_to_width(
+    font: pygame.font.Font, prefix: str, body: str, max_total_w: int
+) -> str:
+    """Fit prefix+body in max_total_w (measures full string; for status lines)."""
+    if max_total_w <= 0:
+        return ""
+    full = prefix + body
+    if font.size(full)[0] <= max_total_w:
+        return body
+    ell = "…"
+    if font.size(prefix + ell)[0] > max_total_w:
+        return ell if font.size(ell)[0] <= max_total_w else ""
+    lo, hi = 0, len(body)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        cand = prefix + body[:mid] + ell
+        if font.size(cand)[0] <= max_total_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return body[:lo] + ell if lo > 0 else ell
 
 
 # -----------------------------
@@ -1564,6 +1787,9 @@ def main() -> int:
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
+    ui_face_frames: List[pygame.Surface] = load_ui_player_face_frames()
+    plasma_orb_frames: Dict[int, Optional[pygame.Surface]] = load_plasma_orb_frames()
+    plasma_orb_decor: Optional[pygame.Surface] = load_plasma_orb_decor()
 
     def stop_title_menu_music() -> None:
         try:
@@ -1604,21 +1830,26 @@ def main() -> int:
         status_rect = layout_state["status_rect"]
         pygame.draw.rect(screen, (0, 0, 0), status_rect, border_radius=10)
         pygame.draw.rect(screen, colors["border"], status_rect, 1, border_radius=10)
-        room = room_def(state["roomId"])["name"].upper()
-        actions_into = state["actions"] % GAME["meta"]["actionsPerLantern"]
-        until_drain = max(0, GAME["meta"]["actionsPerLantern"] - actions_into)
+        room_u = room_name_for_status_bar(room_def(state["roomId"])["name"]).upper()
         threat = "DEAD" if not state["alive"] else ("SEALED" if get_flag(state, "gameWon") else ("CRITICAL" if state["lanterns"] <= 1 else "ACTIVE"))
-        chunks = [
-            f"ROOM: {room}",
-            f"PLASMA LANTERN: {state['lanterns']} (drain in {until_drain})",
+        gap = 18
+        inner_pad = 10
+        max_line_w = max(40, status_rect.w - inner_pad * 2)
+        prefix = "ROOM: "
+        tail_chunks = [
+            f"PLASMA LANTERN: {state['lanterns']}",
             f"ACTIONS: {state['actions']}",
             f"THREAT: {threat}",
         ]
-        x = status_rect.x + 10
+        fixed_w = sum(font_small.size(c)[0] for c in tail_chunks) + gap * len(tail_chunks)
+        max_room_segment_w = max_line_w - fixed_w
+        room_fit = truncate_after_prefix_to_width(font_small, prefix, room_u, max_room_segment_w)
+        chunks = [prefix + room_fit, *tail_chunks]
+        x = status_rect.x + inner_pad
         for ch in chunks:
             col = colors["warn"] if ("THREAT:" in ch and threat == "CRITICAL") else (colors["dead"] if threat == "DEAD" and "THREAT:" in ch else colors["muted"])
             screen.blit(font_small.render(ch, True, col), (x, status_rect.y + 6))
-            x += font_small.size(ch)[0] + 18
+            x += font_small.size(ch)[0] + gap
 
     def current_cmd() -> str:
         return state["cmd"]
@@ -2196,9 +2427,33 @@ def main() -> int:
             if hover:
                 pygame.draw.rect(screen, colors["hotspot_hover"], r, border_radius=6)
                 pygame.draw.rect(screen, colors["hotspot_border"], r, 1, border_radius=6)
+
+        (meter_lx, meter_ly, meter_r), (meter_rx, meter_ry, meter_rr) = viewport_corner_meter_layout(viewport_rect)
+        draw_viewport_corner_meters(
+            screen,
+            meter_lx,
+            meter_ly,
+            meter_r,
+            meter_rx,
+            meter_ry,
+            meter_rr,
+            state,
+            colors,
+            ui_face_frames,
+            plasma_orb_frames,
+            plasma_orb_decor,
+        )
         if hovering_hotspot:
-            tip = font_small.render(hovering_hotspot, True, colors["warn"])
-            screen.blit(tip, (viewport_rect.x + 12, viewport_rect.bottom - 24))
+            # Bottom strip of the room: just above the viewport frame / panel transition, right of plasma meter
+            tip_x = meter_lx + meter_r + 8
+            max_tip_w = max(120, (meter_rx - meter_rr - 8) - tip_x - 8)
+            tip_lines = wrap_text_lines(font_small, hovering_hotspot, max_tip_w)
+            ls = font_small.get_linesize()
+            tip_h = len(tip_lines) * ls
+            edge_pad = 5
+            tip_y = viewport_rect.bottom - edge_pad - tip_h
+            for ti, tline in enumerate(tip_lines):
+                screen.blit(font_small.render(tline, True, colors["warn"]), (tip_x, tip_y + ti * ls))
 
         pygame.draw.rect(screen, colors["panel"], text_panel, border_radius=10)
         pygame.draw.rect(screen, colors["border"], text_panel, 1, border_radius=10)
