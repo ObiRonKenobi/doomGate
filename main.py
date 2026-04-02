@@ -151,6 +151,7 @@ GAME: Dict[str, Any] = {
     # Lowercase keys. Extend with new codes; actions handled in main loop.
     "lindaTerminalCodes": {
         "stonks": {"action": "minigame_rbyt3r"},
+        "rbyt3r": {"action": "god_mode"},
     },
     "manualText": "\n".join(
         [
@@ -640,6 +641,8 @@ def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int,
 
 def plasma_charge_fraction(state: Dict[str, Any]) -> float:
     """0..1 charge of the *active* lantern only (resets to 1.0 when a new lantern starts)."""
+    if state.get("godMode"):
+        return 1.0
     ap = GAME["meta"]["actionsPerLantern"]
     if ap <= 0 or state["lanterns"] <= 0:
         return 0.0
@@ -650,6 +653,8 @@ def plasma_charge_fraction(state: Dict[str, Any]) -> float:
 def player_face_frame_index(state: Dict[str, Any]) -> int:
     """Pick sprite index for status portrait (0=good … higher=worse)."""
     if get_flag(state, "gameWon"):
+        return 0
+    if state.get("godMode"):
         return 0
     if not state["alive"]:
         return 5
@@ -952,11 +957,32 @@ def default_state() -> Dict[str, Any]:
         "lanternCount": n0,
         "lanterns": n0,
         "alive": True,
+        "godMode": False,
     }
 
 
 def clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
+
+
+def enable_god_mode(state: Dict[str, Any], log: Any) -> None:
+    """Debug: invulnerability, pegged lantern/orb, every item, full map reveal."""
+    state["godMode"] = True
+    state["alive"] = True
+    mx = int(GAME["meta"]["lanternMaxCarry"])
+    state["lanternCount"] = mx
+    state["actions"] = int(GAME["meta"]["startActions"])
+    state["lanterns"] = mx
+    for iid in GAME["items"].keys():
+        if iid not in state["inventory"]:
+            state["inventory"].append(iid)
+    state.setdefault("seenRooms", {})
+    for rid in GAME["rooms"].keys():
+        state["seenRooms"][rid] = True
+    log.add(
+        "L.I.N.D.A. DEBUG: God mode. No real death, lantern full, whole kit, map revealed.",
+        "sys",
+    )
 
 
 def item_def(item_id: str) -> Dict[str, Any]:
@@ -1400,6 +1426,8 @@ def apply_action(state: Dict[str, Any], kind: str, log: ScrollLog) -> None:
     cost = action_cost(kind)
     if cost <= 0:
         return
+    if state.get("godMode"):
+        return
     state["actions"] += cost
     ap = GAME["meta"]["actionsPerLantern"]
     spent = state["actions"] // ap
@@ -1413,6 +1441,10 @@ def apply_action(state: Dict[str, Any], kind: str, log: ScrollLog) -> None:
 
 def die(state: Dict[str, Any], log: ScrollLog, text: str) -> None:
     if not state["alive"]:
+        return
+    if state.get("godMode"):
+        log.add(text, "dead")
+        log.add("(God mode — you're still here. That was for show.)", "sys")
         return
     state["alive"] = False
     log.add(text, "dead")
@@ -1845,6 +1877,7 @@ def main() -> int:
             base.setdefault("pendingRoomPopup", None)
             base.setdefault("pendingLindaTerminal", False)
             base.setdefault("lindaWrongCount", 0)
+            base.setdefault("godMode", False)
             base.setdefault("inventory", [])
             ap_m = GAME["meta"]["actionsPerLantern"]
             sp_m = base.get("actions", 0) // ap_m
@@ -1946,7 +1979,15 @@ def main() -> int:
         pygame.draw.rect(screen, (0, 0, 0), status_rect, border_radius=10)
         pygame.draw.rect(screen, colors["border"], status_rect, 1, border_radius=10)
         room_u = room_name_for_status_bar(room_def(state["roomId"])["name"]).upper()
-        threat = "DEAD" if not state["alive"] else ("SEALED" if get_flag(state, "gameWon") else ("CRITICAL" if state["lanterns"] <= 1 else "ACTIVE"))
+        threat = (
+            "DEAD"
+            if not state["alive"]
+            else (
+                "SEALED"
+                if get_flag(state, "gameWon")
+                else ("DEBUG" if state.get("godMode") else ("CRITICAL" if state["lanterns"] <= 1 else "ACTIVE"))
+            )
+        )
         gap = 18
         inner_pad = 10
         max_line_w = max(40, status_rect.w - inner_pad * 2)
@@ -1962,7 +2003,14 @@ def main() -> int:
         chunks = [prefix + room_fit, *tail_chunks]
         x = status_rect.x + inner_pad
         for ch in chunks:
-            col = colors["warn"] if ("THREAT:" in ch and threat == "CRITICAL") else (colors["dead"] if threat == "DEAD" and "THREAT:" in ch else colors["muted"])
+            if "THREAT:" in ch and threat == "CRITICAL":
+                col = colors["warn"]
+            elif "THREAT:" in ch and threat == "DEBUG":
+                col = colors["accent_dim"]
+            elif threat == "DEAD" and "THREAT:" in ch:
+                col = colors["dead"]
+            else:
+                col = colors["muted"]
             screen.blit(font_small.render(ch, True, col), (x, status_rect.y + 6))
             x += font_small.size(ch)[0] + gap
 
@@ -2306,6 +2354,8 @@ def main() -> int:
             active_linda_popup = None
             if action == "minigame_rbyt3r":
                 launch_rbyt3r_minigame()
+            elif action == "god_mode":
+                enable_god_mode(state, log)
             return
         state["lindaWrongCount"] = int(state.get("lindaWrongCount", 0)) + 1
         if state["lindaWrongCount"] >= 3:

@@ -697,7 +697,8 @@
     },
     // Lowercase keys. Extend with new codes over time.
     lindaTerminalCodes: {
-      stonks: { action: "minigame_rbyt3r" }
+      stonks: { action: "minigame_rbyt3r" },
+      rbyt3r: { action: "god_mode" }
     },
     rooms: {
       hangar: {
@@ -1112,7 +1113,8 @@ WIN CONDITION
     lanternCount: GAME.meta.startLanterns,
     lanterns: GAME.meta.startLanterns,
     alive: true,
-    lindaWrongCount: 0
+    lindaWrongCount: 0,
+    godMode: false
   });
 
   let state = DEFAULT_STATE();
@@ -1186,6 +1188,7 @@ WIN CONDITION
   function applyAction(kind){
     const cost = actionCost(kind);
     if(cost<=0) return;
+    if(state.godMode) return;
     state.actions += cost;
     const ap = GAME.meta.actionsPerLantern;
     const spent = Math.floor(state.actions / ap);
@@ -1200,6 +1203,13 @@ WIN CONDITION
 
   function die(text){
     if(!state.alive) return;
+    if(state.godMode){
+      logLine(text, "line dead");
+      logSys("(God mode — you're still here. That was for show.)");
+      state.alive = true;
+      render();
+      return;
+    }
     state.alive = false;
     logDead(text);
     logDead("YOU HAVE DIED. (Save early. Save often. Shadowgate would.)");
@@ -1496,7 +1506,7 @@ WIN CONDITION
     statusLanternEl.textContent = `PLASMA LANTERN: ${state.lanterns}`;
     statusActionsEl.textContent = `ACTIONS: ${state.actions}`;
 
-    const threat = !state.alive ? "DEAD" : (flag("gameWon") ? "SEALED" : (state.lanterns<=1 ? "CRITICAL" : "ACTIVE"));
+    const threat = !state.alive ? "DEAD" : (flag("gameWon") ? "SEALED" : (state.godMode ? "DEBUG" : (state.lanterns<=1 ? "CRITICAL" : "ACTIVE")));
     statusThreatEl.textContent = `THREAT: ${threat}`;
     statusThreatEl.classList.toggle("danger", threat==="CRITICAL" || threat==="DEAD");
 
@@ -1831,6 +1841,9 @@ WIN CONDITION
       if(state.lindaWrongCount == null || state.lindaWrongCount === undefined){
         state.lindaWrongCount = 0;
       }
+      if(state.godMode == null || state.godMode === undefined){
+        state.godMode = false;
+      }
       logSys("Loaded save.");
       logLine(roomDef(state.roomId).desc);
       render();
@@ -1854,6 +1867,20 @@ WIN CONDITION
     lindaBackdrop.classList.remove("show");
   }
 
+  function enableGodMode(){
+    state.godMode = true;
+    state.alive = true;
+    const mx = GAME.meta.lanternMaxCarry;
+    state.lanternCount = mx;
+    state.actions = GAME.meta.startActions;
+    state.lanterns = mx;
+    Object.keys(GAME.items).forEach(id=>{
+      if(!state.inventory.includes(id)) state.inventory.push(id);
+    });
+    Object.keys(GAME.rooms).forEach(rid=>{ state.seenRooms[rid] = true; });
+    logSys("L.I.N.D.A. DEBUG: God mode. No real death, lantern full, whole kit, map revealed.");
+  }
+
   function openLindaTerminal(){
     const wc = state.lindaWrongCount || 0;
     lindaBodyEl.textContent = wc > 0
@@ -1875,6 +1902,8 @@ WIN CONDITION
       if(action === "minigame_rbyt3r"){
         logSys("RBYT3R Epoch runs inside the Pygame desktop build (subprocess). Browser edition cannot embed it; repo opened in a new tab.");
         window.open(RBYT3R_REPO, "_blank", "noopener,noreferrer");
+      } else if(action === "god_mode"){
+        enableGodMode();
       }
       render();
       return;
