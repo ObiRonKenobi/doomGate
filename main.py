@@ -2,7 +2,6 @@ import json
 import math
 import os
 import re
-import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -1076,6 +1075,16 @@ class ScrollLog:
         self.scroll(-y * 28)
 
 
+def announce_victory_if_won(state: Dict[str, Any], log: ScrollLog) -> None:
+    if not get_flag(state, "gameWon"):
+        return
+    log.add("VICTORY", "title")
+    log.add(
+        "The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.",
+        "sys",
+    )
+
+
 # -----------------------------
 # Pixelated background generator
 # -----------------------------
@@ -1568,9 +1577,7 @@ def resolve_object_action(
             if opt.get("onceFlag"):
                 set_flag(state, opt["onceFlag"], True)
             apply_action(state, "interact", log)
-            if get_flag(state, "gameWon"):
-                log.add("VICTORY", "title")
-                log.add("The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.", "sys")
+            announce_victory_if_won(state, log)
             return
         d = handler.get("default")
         if d:
@@ -1636,10 +1643,7 @@ def resolve_object_action(
         remove_items(state, [held])
 
     apply_action(state, "interact", log)
-
-    if get_flag(state, "gameWon"):
-        log.add("VICTORY", "title")
-        log.add("The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.", "sys")
+    announce_victory_if_won(state, log)
 
 
 # -----------------------------

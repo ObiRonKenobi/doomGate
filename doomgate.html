@@ -1039,6 +1039,9 @@ WIN CONDITION
 `
   };
 
+  const VICTORY_FOOTNOTE =
+    "The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.";
+
   // -----------------------------
   // State
   // -----------------------------
@@ -1093,11 +1096,6 @@ WIN CONDITION
   function hasItem(id){ return state.inventory.includes(id); }
   function flag(name){ return !!state.flags[name]; }
   function setFlag(name, v=true){ state.flags[name]=v; }
-  function once(flagName){
-    if(flag(flagName)) return false;
-    setFlag(flagName,true);
-    return true;
-  }
 
   function logLine(text, cls="line"){
     const p = document.createElement("div");
@@ -1150,7 +1148,7 @@ WIN CONDITION
 
   function win(){
     logTitle("VICTORY");
-    logSys("The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.");
+    logSys(VICTORY_FOOTNOTE);
     state.alive = true;
     render();
   }
@@ -1357,9 +1355,7 @@ WIN CONDITION
           if(id === "soulCoreFrame"){
             const hadBreaker = hasItem("soulCoreBreaker");
             tryCombination(id, id);
-            if(!hadBreaker && hasItem("soulCoreBreaker")){
-              // Assembled; held is already soulCoreBreaker inside assembleSoulCoreBreaker.
-            } else {
+            if(hadBreaker || !hasItem("soulCoreBreaker")){
               state.heldItemId = null;
             }
           } else {
@@ -1612,12 +1608,16 @@ WIN CONDITION
         if(opt.setFlag) setFlag(opt.setFlag,true);
         if(opt.onceFlag) setFlag(opt.onceFlag,true);
         applyAction("interact");
+        if(flag("gameWon")) win();
         return;
       }
       if(handler.default){
         if(handler.default.text) logLine(handler.default.text);
         if(handler.default.death) die(GAME.deaths[handler.default.death] ?? "You die.");
-        else applyAction("interact");
+        else {
+          applyAction("interact");
+          if(flag("gameWon")) win();
+        }
         return;
       }
     }
@@ -1807,9 +1807,6 @@ WIN CONDITION
     restart();
   });
 
-  // -----------------------------
-  // Item-on-item use (inventory combo mode)
-  // -----------------------------
   // -----------------------------
   // Start
   // -----------------------------
