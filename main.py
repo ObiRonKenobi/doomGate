@@ -2,6 +2,8 @@ import json
 import math
 import os
 import re
+import subprocess
+import sys
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -47,6 +49,7 @@ GAME: Dict[str, Any] = {
         "hatchPryDeath": "You heave at the sealed excavation hatch with bare hands. The frame shifts, clamps, and bites. Hydraulics torque shut on meat and bone like a vise with standards. You don't die of drama—you die of being attached to steel that won't open.",
         "lockerKickDeath": "You USE the locker the way a boot USES a door. Reinforced UAC steel answers. Your knee loses the argument; your leg folds wrong. You end up on the armory floor, vision narrowing. Infection and thirst take the second shift; the demons only need you to still be here.",
         "terminalFries": "The sigil doesn't stay on the glass—it completes through you. Voltage and something worse ride your nerves until the terminal gets the only reading it wants: zero.",
+        "terminalOverload": "The terminal accepts one wrong guess too many. Capacitors scream, argent bleed through the PCB, and the stack explodes like a bad IPO. Your last thought is that L.I.N.D.A. did warn you.",
         "sealFlays": "You try to peel the blood-seal like a sticker. The glyph renegotiates ownership. It unthreads you layer by layer until there's nothing left to pocket—only a stain that used to be confident.",
         "glassKills": "Possessed glass doesn't choose an exit vector—it chooses all of them. Shards go through your elbow decision and through you on the return trip. The display case ends up wearing more of you than you take from it.",
         "knightKills": "The Hell Knight does not take questions. Claws and heat rewrite your posture in one motion. Your rifle never gets to file a dissenting opinion.",
@@ -145,6 +148,10 @@ GAME: Dict[str, Any] = {
         },
         {"a": "soulCoreFrame", "b": "soulCoreFrame", "special": "assembleSoulCoreBreaker"},
     ],
+    # Lowercase keys. Extend with new codes; actions handled in main loop.
+    "lindaTerminalCodes": {
+        "stonks": {"action": "minigame_rbyt3r"},
+    },
     "manualText": "\n".join(
         [
             "WELCOME TO DOOMGATE: THE WARLOCK'S CRUCIBLE",
@@ -198,7 +205,7 @@ GAME["rooms"] = {
             "terminal": {
                 "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
                 "talk": "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
-                "use": {"death": "terminalFries", "text": "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary."},
+                "use": {"special": "lindaTerminal"},
             },
             "lanternCrate": {
                 "look": "A dented supply crate with a UAC latch. Something inside hums politely.",
@@ -939,6 +946,8 @@ def default_state() -> Dict[str, Any]:
         "seenRooms": {},
         "roomIntroShown": {},
         "pendingRoomPopup": None,
+        "pendingLindaTerminal": False,
+        "lindaWrongCount": 0,
         "actions": GAME["meta"]["startActions"],
         "lanternCount": n0,
         "lanterns": n0,
@@ -1552,6 +1561,11 @@ def resolve_object_action(
         apply_action(state, "interact", log)
         return
 
+    if isinstance(handler, dict) and handler.get("special") == "lindaTerminal":
+        state["pendingLindaTerminal"] = True
+        apply_action(state, "interact", log)
+        return
+
     # Death handler
     if handler.get("death"):
         if handler.get("text"):
@@ -1829,6 +1843,8 @@ def main() -> int:
             base.setdefault("seenRooms", {})
             base.setdefault("roomIntroShown", {})
             base.setdefault("pendingRoomPopup", None)
+            base.setdefault("pendingLindaTerminal", False)
+            base.setdefault("lindaWrongCount", 0)
             base.setdefault("inventory", [])
             ap_m = GAME["meta"]["actionsPerLantern"]
             sp_m = base.get("actions", 0) // ap_m
@@ -1864,9 +1880,10 @@ def main() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
-        nonlocal active_room_popup, active_manual_popup
+        nonlocal active_room_popup, active_manual_popup, active_linda_popup
         active_room_popup = None
         active_manual_popup = None
+        active_linda_popup = None
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
@@ -1881,6 +1898,7 @@ def main() -> int:
     item_popup_queue: List[str] = []
     active_room_popup: Optional[Dict[str, Any]] = None
     active_manual_popup: Optional[Dict[str, Any]] = None
+    active_linda_popup: Optional[Dict[str, Any]] = None
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
@@ -2202,6 +2220,107 @@ def main() -> int:
         prompt = font_small.render(prompt_txt, True, colors["warn"])
         screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 22)))
 
+    def draw_linda_popup(popup: Dict[str, Any]) -> None:
+        W, H = screen.get_size()
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 130))
+        screen.blit(overlay, (0, 0))
+
+        panel_w = min(680, W - 60)
+        panel_h = min(420, H - 60)
+        panel = pygame.Rect((W - panel_w) // 2, (H - panel_h) // 2, panel_w, panel_h)
+        pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
+
+        title_s = font_mono.render("L.I.N.D.A. — ACCESS", True, colors["accent"])
+        screen.blit(title_s, (panel.x + 18, panel.y + 14))
+
+        inner = pygame.Rect(panel.x + 16, panel.y + 44, panel.w - 32, panel.h - 96)
+        pygame.draw.rect(screen, (0, 0, 0), inner)
+
+        full_text: str = popup["full_text"]
+        shown: str = full_text[: int(popup.get("idx", 0))]
+        body_font = font_mono
+        lines = wrap_text_lines(body_font, shown, inner.w - 4)
+        y = inner.y + 6
+        lh = body_font.get_linesize()
+        max_lines = max(1, int((inner.h - 70) / lh))
+        for line in lines[-max_lines:]:
+            screen.blit(body_font.render(line, True, colors["accent"]), (inner.x + 2, y))
+            y += lh
+
+        if popup.get("phase") == "entry":
+            inp = str(popup.get("input", ""))
+            blink = (pygame.time.get_ticks() // 520) % 2
+            prompt_line = "> " + inp + ("█" if blink else "")
+            screen.blit(body_font.render(prompt_line, True, colors["warn"]), (inner.x + 2, inner.bottom - 44))
+            hint = font_small.render("ENTER — submit   ESC / Q — close (Q if code field empty)", True, colors["muted"])
+            screen.blit(hint, (panel.x + 18, panel.bottom - 26))
+
+    def launch_rbyt3r_minigame() -> None:
+        """Run RBYT3R Epoch in a subprocess so DoomGate state and pygame stay intact."""
+        here = os.path.dirname(os.path.abspath(__file__))
+        env_path = os.environ.get("RBYT3R_EPOCH_PATH", "").strip()
+        candidates: List[str] = []
+        if env_path:
+            candidates.append(env_path)
+        candidates.extend(
+            [
+                os.path.join(here, "assets", "minigame", "rbyt3rEpoch_theGame"),
+                os.path.join(here, "rbyt3rEpoch_theGame"),
+                os.path.normpath(os.path.join(here, "..", "rbyt3rEpoch_theGame")),
+            ]
+        )
+        repo_root: Optional[str] = None
+        for c in candidates:
+            if c and os.path.isdir(os.path.join(c, "rbyt3r_epoch")):
+                repo_root = c
+                break
+        if repo_root is None:
+            log.add(
+                "RBYT3R Epoch not found. Expected assets/minigame/rbyt3rEpoch_theGame (or set RBYT3R_EPOCH_PATH), "
+                "then enter STONKS again.",
+                "warn",
+            )
+            return
+        try:
+            subprocess.run([sys.executable, "-m", "rbyt3r_epoch"], cwd=repo_root, check=False)
+        except OSError as exc:
+            log.add(f"Could not launch RBYT3R Epoch: {exc}", "warn")
+
+    def submit_linda_code() -> None:
+        nonlocal active_linda_popup
+        if active_linda_popup is None or active_linda_popup.get("phase") != "entry":
+            return
+        raw = str(active_linda_popup.get("input", ""))
+        code = raw.strip().lower()
+        codes = GAME.get("lindaTerminalCodes") or {}
+        entry = codes.get(code)
+        try:
+            pygame.key.stop_text_input()
+        except Exception:
+            pass
+        if entry is not None:
+            action = entry.get("action") if isinstance(entry, dict) else entry
+            state["lindaWrongCount"] = 0
+            active_linda_popup = None
+            if action == "minigame_rbyt3r":
+                launch_rbyt3r_minigame()
+            return
+        state["lindaWrongCount"] = int(state.get("lindaWrongCount", 0)) + 1
+        if state["lindaWrongCount"] >= 3:
+            active_linda_popup = None
+            die(state, log, GAME["deaths"]["terminalOverload"])
+            return
+        apply_action(state, "interact", log)
+        log.add("Proceed at your own risk!", "warn")
+        active_linda_popup["full_text"] = "Proceed at your own risk!\n\nENTER CODE:\n\n"
+        active_linda_popup["idx"] = 0
+        active_linda_popup["done"] = False
+        active_linda_popup["phase"] = "typewriter"
+        active_linda_popup["input"] = ""
+        active_linda_popup["acc_ms"] = 0
+
     # Cache loaded title art; retry periodically if missing so files can appear without restart.
     title_bg_cached: Optional[pygame.Surface] = None
     title_bg_miss_cooldown: int = 0
@@ -2304,6 +2423,26 @@ def main() -> int:
             active_room_popup = {"roomId": rid, "text": full, "idx": 0, "done": False, "acc_ms": 0}
             state["pendingRoomPopup"] = None
 
+        if (
+            active_linda_popup is None
+            and state.get("pendingLindaTerminal")
+            and not title_screen
+            and active_manual_popup is None
+            and active_room_popup is None
+            and not item_popup_queue
+        ):
+            wc = int(state.get("lindaWrongCount", 0))
+            ft = "ENTER CODE:\n\n" if wc <= 0 else "Proceed at your own risk!\n\nENTER CODE:\n\n"
+            active_linda_popup = {
+                "full_text": ft,
+                "idx": 0,
+                "done": False,
+                "phase": "typewriter",
+                "input": "",
+                "acc_ms": 0,
+            }
+            state["pendingLindaTerminal"] = False
+
         # Typewriter effect update
         if active_room_popup is not None and not active_room_popup.get("done", False):
             active_room_popup["acc_ms"] = int(active_room_popup.get("acc_ms", 0)) + int(dt_ms)
@@ -2316,6 +2455,23 @@ def main() -> int:
                     active_room_popup["idx"] = len(active_room_popup["text"])
                     active_room_popup["done"] = True
 
+        if active_linda_popup is not None and active_linda_popup.get("phase") == "typewriter" and not active_linda_popup.get("done", False):
+            active_linda_popup["acc_ms"] = int(active_linda_popup.get("acc_ms", 0)) + int(dt_ms)
+            cps = 45
+            step_ms = max(1, int(1000 / cps))
+            ft = active_linda_popup["full_text"]
+            while active_linda_popup["acc_ms"] >= step_ms and not active_linda_popup.get("done", False):
+                active_linda_popup["acc_ms"] -= step_ms
+                active_linda_popup["idx"] = int(active_linda_popup.get("idx", 0)) + 1
+                if active_linda_popup["idx"] >= len(ft):
+                    active_linda_popup["idx"] = len(ft)
+                    active_linda_popup["done"] = True
+                    active_linda_popup["phase"] = "entry"
+                    try:
+                        pygame.key.start_text_input()
+                    except Exception:
+                        pass
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -2327,7 +2483,13 @@ def main() -> int:
                 sprite_cache.clear()
                 bg_fallback_cache.clear()
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
-                if active_room_popup is not None:
+                if active_linda_popup is not None:
+                    active_linda_popup = None
+                    try:
+                        pygame.key.stop_text_input()
+                    except Exception:
+                        pass
+                elif active_room_popup is not None:
                     active_room_popup = None
                 elif active_manual_popup is not None:
                     active_manual_popup = None
@@ -2335,6 +2497,38 @@ def main() -> int:
                     item_popup_queue.pop(0)
                 else:
                     running = False
+            elif active_linda_popup is not None:
+                if event.type == pygame.KEYDOWN:
+                    if event.key == pygame.K_q and not str(active_linda_popup.get("input", "")).strip():
+                        active_linda_popup = None
+                        try:
+                            pygame.key.stop_text_input()
+                        except Exception:
+                            pass
+                    elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+                        submit_linda_code()
+                    elif event.key == pygame.K_BACKSPACE:
+                        if active_linda_popup.get("phase") == "entry":
+                            s = str(active_linda_popup.get("input", ""))
+                            active_linda_popup["input"] = s[:-1]
+                elif event.type == pygame.TEXTINPUT:
+                    if active_linda_popup.get("phase") == "entry":
+                        t = getattr(event, "text", "") or ""
+                        if t:
+                            active_linda_popup["input"] = str(active_linda_popup.get("input", "")) + t
+                elif event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                    if active_linda_popup.get("phase") == "typewriter":
+                        ft = active_linda_popup["full_text"]
+                        if not active_linda_popup.get("done", False):
+                            active_linda_popup["idx"] = len(ft)
+                            active_linda_popup["done"] = True
+                            active_linda_popup["phase"] = "entry"
+                            try:
+                                pygame.key.start_text_input()
+                            except Exception:
+                                pass
+                else:
+                    pass
             elif active_room_popup is not None:
                 # While visible: swallow all input so the room can't be interacted with.
                 if event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
@@ -2455,6 +2649,7 @@ def main() -> int:
                     and not item_popup_queue
                     and active_room_popup is None
                     and active_manual_popup is None
+                    and active_linda_popup is None
                 ):
                     debug_hotspots = not debug_hotspots
 
@@ -2463,7 +2658,7 @@ def main() -> int:
             pygame.display.flip()
             continue
 
-        if active_room_popup is not None:
+        if active_room_popup is not None or active_linda_popup is not None:
             # Freeze world interaction while popup is present, but still render the room underneath.
             pass
 
@@ -2591,6 +2786,8 @@ def main() -> int:
             draw_item_acquire_popup(item_popup_queue[0])
         if active_room_popup is not None:
             draw_room_intro_popup(active_room_popup)
+        if active_linda_popup is not None:
+            draw_linda_popup(active_linda_popup)
         if active_manual_popup is not None:
             draw_manual_popup(active_manual_popup)
 

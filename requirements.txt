@@ -1,2 +1,2 @@
 pygame>=2.5.2
-
+# RBYT3R Epoch is vendored at assets/minigame/rbyt3rEpoch_theGame (optional: RBYT3R_EPOCH_PATH override).

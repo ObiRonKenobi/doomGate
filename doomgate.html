@@ -416,6 +416,41 @@
       letter-spacing:.4px;
     }
     .modal .row button:hover{ border-color: rgba(25,255,106,.45); }
+
+    #lindaBackdrop{ z-index: 11; }
+    .lindaPanel .lindaBody{
+      white-space:pre-wrap;
+      margin:0 0 10px;
+      font-family:var(--mono);
+      font-size: 12px;
+      color: #9fe7bf;
+      line-height: 1.4;
+      min-height: 4.2em;
+    }
+    .lindaLabel{
+      display:block;
+      font-family:var(--mono);
+      font-size:11px;
+      color: var(--warn);
+      margin-bottom: 6px;
+      letter-spacing:.4px;
+    }
+    .lindaInput{
+      width:100%;
+      box-sizing:border-box;
+      font-family:var(--mono);
+      font-size: 13px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      border: 1px solid #2a4a38;
+      background: rgba(0,0,0,.35);
+      color: #e5efe9;
+    }
+    .lindaInput:focus{
+      outline: none;
+      border-color: rgba(25,255,106,.55);
+      box-shadow: 0 0 0 2px rgba(25,255,106,.12);
+    }
   </style>
 </head>
 <body>
@@ -497,6 +532,19 @@
       <div class="row">
         <button id="btnCloseModal">Close</button>
         <button id="btnCopyState">Copy Save JSON</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="lindaBackdrop" class="modalBackdrop" role="dialog" aria-modal="true" aria-label="LINDA Terminal">
+    <div class="modal lindaPanel">
+      <h2>L.I.N.D.A. — ACCESS</h2>
+      <pre id="lindaBody" class="lindaBody"></pre>
+      <label class="lindaLabel" for="lindaInput">ENTER CODE:</label>
+      <input type="text" id="lindaInput" class="lindaInput" autocomplete="off" spellcheck="false" />
+      <div class="row">
+        <button type="button" id="lindaSubmit">Submit</button>
+        <button type="button" id="lindaCancel">Cancel</button>
       </div>
     </div>
   </div>
@@ -644,7 +692,12 @@
       cruxKills: "You bring fists and attitude to a boardroom hosted by a fused demon-executive. Crux answers with talons through the gaps in your armor. The rift applauds in heat.",
       conduitFry: "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again—business as usual.",
       crystalFlash: "You press in close for a 'better look.' The Omega Crystal answers with a containment flash that goes through your visor and out the back of your thoughts. Your suit logs one heartbeat, then static.",
-      riftTouch: "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name."
+      riftTouch: "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name.",
+      terminalOverload: "The terminal accepts one wrong guess too many. Capacitors scream, argent bleed through the PCB, and the stack explodes like a bad IPO. Your last thought is that L.I.N.D.A. did warn you."
+    },
+    // Lowercase keys. Extend with new codes over time.
+    lindaTerminalCodes: {
+      stonks: { action: "minigame_rbyt3r" }
     },
     rooms: {
       hangar: {
@@ -665,7 +718,7 @@
           terminal: {
             look: "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
             talk: "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
-            use: { death: "terminalFries", text: "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary." }
+            use: { special: "lindaTerminal" }
           },
           lanternCrate: {
             look: "A dented supply crate with a UAC latch. Something inside hums politely.",
@@ -1041,6 +1094,7 @@ WIN CONDITION
 
   const VICTORY_FOOTNOTE =
     "The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.";
+  const RBYT3R_REPO = "https://github.com/ObiRonKenobi/rbyt3rEpoch_theGame";
 
   // -----------------------------
   // State
@@ -1057,7 +1111,8 @@ WIN CONDITION
     actions: GAME.meta.startActions,
     lanternCount: GAME.meta.startLanterns,
     lanterns: GAME.meta.startLanterns,
-    alive: true
+    alive: true,
+    lindaWrongCount: 0
   });
 
   let state = DEFAULT_STATE();
@@ -1087,6 +1142,11 @@ WIN CONDITION
   const btnCopyState = $("#btnCopyState");
   const btnHelp = $("#btnHelp");
   const btnRestart = $("#btnRestart");
+  const lindaBackdrop = $("#lindaBackdrop");
+  const lindaBodyEl = $("#lindaBody");
+  const lindaInputEl = $("#lindaInput");
+  const btnLindaSubmit = $("#lindaSubmit");
+  const btnLindaCancel = $("#lindaCancel");
 
   // -----------------------------
   // Utility
@@ -1586,6 +1646,12 @@ WIN CONDITION
       return;
     }
 
+    if(handler.special === "lindaTerminal"){
+      applyAction("interact");
+      openLindaTerminal();
+      return;
+    }
+
     // structured handlers:
     // { death:"key", text:"..." }
     if(handler.death){
@@ -1762,6 +1828,9 @@ WIN CONDITION
       } else {
         state.lanterns = state.lanternCount - sp0;
       }
+      if(state.lindaWrongCount == null || state.lindaWrongCount === undefined){
+        state.lindaWrongCount = 0;
+      }
       logSys("Loaded save.");
       logLine(roomDef(state.roomId).desc);
       render();
@@ -1781,6 +1850,50 @@ WIN CONDITION
   // -----------------------------
   // Modal / manual
   // -----------------------------
+  function hideLindaTerminal(){
+    lindaBackdrop.classList.remove("show");
+  }
+
+  function openLindaTerminal(){
+    const wc = state.lindaWrongCount || 0;
+    lindaBodyEl.textContent = wc > 0
+      ? "Proceed at your own risk!\n\nENTER CODE:\n\n"
+      : "ENTER CODE:\n\n";
+    lindaInputEl.value = "";
+    lindaBackdrop.classList.add("show");
+    setTimeout(()=>{ try{ lindaInputEl.focus(); }catch(_e){} }, 30);
+  }
+
+  function submitLindaTerminalCode(){
+    const raw = (lindaInputEl.value || "").trim().toLowerCase();
+    const codes = GAME.lindaTerminalCodes || {};
+    const entry = codes[raw];
+    if(entry){
+      const action = entry.action;
+      state.lindaWrongCount = 0;
+      hideLindaTerminal();
+      if(action === "minigame_rbyt3r"){
+        logSys("RBYT3R Epoch runs inside the Pygame desktop build (subprocess). Browser edition cannot embed it; repo opened in a new tab.");
+        window.open(RBYT3R_REPO, "_blank", "noopener,noreferrer");
+      }
+      render();
+      return;
+    }
+    state.lindaWrongCount = (state.lindaWrongCount || 0) + 1;
+    if(state.lindaWrongCount >= 3){
+      hideLindaTerminal();
+      die(GAME.deaths.terminalOverload);
+      render();
+      return;
+    }
+    applyAction("interact");
+    logWarn("Proceed at your own risk!");
+    lindaBodyEl.textContent = "Proceed at your own risk!\n\nENTER CODE:\n\n";
+    lindaInputEl.value = "";
+    lindaInputEl.focus();
+    render();
+  }
+
   function showModal(title, body){
     modalTitle.textContent = title;
     modalBody.textContent = body;
@@ -1805,6 +1918,33 @@ WIN CONDITION
   btnRestart.addEventListener("click", ()=>{
     localStorage.removeItem(GAME.meta.saveKey);
     restart();
+  });
+
+  btnLindaSubmit.addEventListener("click", submitLindaTerminalCode);
+  btnLindaCancel.addEventListener("click", ()=>{ hideLindaTerminal(); });
+  lindaBackdrop.addEventListener("click", (e)=>{ if(e.target === lindaBackdrop) hideLindaTerminal(); });
+  lindaInputEl.addEventListener("keydown", (e)=>{
+    if(e.key === "Enter"){
+      e.preventDefault();
+      submitLindaTerminalCode();
+      return;
+    }
+    if(e.key === "Escape"){
+      e.preventDefault();
+      hideLindaTerminal();
+      return;
+    }
+    if((e.key === "q" || e.key === "Q") && !lindaInputEl.value.length){
+      e.preventDefault();
+      hideLindaTerminal();
+    }
+  });
+  window.addEventListener("keydown", (e)=>{
+    if(!lindaBackdrop.classList.contains("show")) return;
+    if(e.key === "Escape"){
+      e.preventDefault();
+      hideLindaTerminal();
+    }
   });
 
   // -----------------------------
