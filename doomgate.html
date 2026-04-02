@@ -90,6 +90,19 @@
       display:block;
       filter: saturate(1.05) contrast(1.03);
     }
+    .lanternMeterBadge{
+      pointer-events:none;
+      position:absolute;
+      left:10px;
+      bottom:10px;
+      font-family: ui-monospace, monospace;
+      font-size:11px;
+      font-weight:700;
+      letter-spacing:0.5px;
+      color: rgba(25,255,106,.92);
+      text-shadow: 0 0 6px rgba(0,0,0,.95), 0 1px 0 rgba(0,0,0,.8);
+      z-index: 4;
+    }
     .scanlines{
       pointer-events:none;
       position:absolute;
@@ -417,6 +430,7 @@
         <div id="roomArt" class="roomArt"></div>
         <div class="scanlines"></div>
         <div id="hotspotsLayer" aria-hidden="false"></div>
+        <div id="lanternMeterBadge" class="lanternMeterBadge" aria-hidden="true">3/5</div>
       </div>
 
       <div class="bottom">
@@ -495,8 +509,9 @@
     meta: {
       title: "DOOMGATE: The Warlock's Crucible",
       saveKey: "doomgate_save_v1",
-      actionsPerLantern: 18,
+      actionsPerLantern: 15,
       startLanterns: 3,
+      lanternMaxCarry: 5,
       startActions: 0
     },
     commands: [
@@ -616,11 +631,20 @@
       }
     ],
     deaths: {
-      darkness: "The Plasma Lantern gutters out. Darkness rushes in like a liquid. You hear claws on metal. The last sound you make is a very private, very reasonable regret.",
-      slime: "You dip your armored glove into the glowing ooze. It wasn't coolant. Your arm seizes, your veins turn to acid, and you explode into a fine, red mist. The slime seems... slightly greener now. Your watch has stopped.",
-      fan: "You lean into the vent fan to \"check for airflow.\" The fan checks you for structural integrity. You fail the interview.",
-      demonTaunt: "You try to negotiate with a creature made of hate and teeth. It accepts your offer of \"standing still\" and signs with your spine.",
-      badPortal: "You poke the Hell rift with your hand because curiosity is a lifestyle. The rift pokes back. Your atoms go on a brief vacation and never return."
+      darkness: "The last Plasma Lantern dies. Blackness pours in—not empty dark, but hungry. Something that waited outside the light consumes you whole: no report, no remains, only the quiet proof that darkness here eats its fill.",
+      slime: "The ooze isn't coolant. The moment you commit, it climbs armor seams like living acid. You don't melt in a movie-monster way—you simply stop being a solvable problem. The pool settles, a shade smugger than before.",
+      crateTakeDeath: "You try to haul the entire crate like a hero lifting a trophy. Your spine disagrees with your casting. You go down hard on UAC decking and stay down. The hangar keeps breathing. Hours later, something hungry follows the smell of helpless.",
+      hatchPryDeath: "You heave at the sealed excavation hatch with bare hands. The frame shifts, clamps, and bites. Hydraulics torque shut on meat and bone like a vise with standards. You don't die of drama—you die of being attached to steel that won't open.",
+      lockerKickDeath: "You USE the locker the way a boot USES a door. Reinforced UAC steel answers. Your knee loses the argument; your leg folds wrong. You end up on the armory floor, vision narrowing. Infection and thirst take the second shift; the demons only need you to still be here.",
+      terminalFries: "The sigil doesn't stay on the glass—it completes through you. Voltage and something worse ride your nerves until the terminal gets the only reading it wants: zero.",
+      sealFlays: "You try to peel the blood-seal like a sticker. The glyph renegotiates ownership. It unthreads you layer by layer until there's nothing left to pocket—only a stain that used to be confident.",
+      glassKills: "Possessed glass doesn't choose an exit vector—it chooses all of them. Shards go through your elbow decision and through you on the return trip. The display case ends up wearing more of you than you take from it.",
+      knightKills: "The Hell Knight does not take questions. Claws and heat rewrite your posture in one motion. Your rifle never gets to file a dissenting opinion.",
+      altarKnightKills: "You commit to reaching the altar anyway. The Hell Knight commits to stopping that story. It closes the distance the way a door closes—final, with metal.",
+      cruxKills: "You bring fists and attitude to a boardroom hosted by a fused demon-executive. Crux answers with talons through the gaps in your armor. The rift applauds in heat.",
+      conduitFry: "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again—business as usual.",
+      crystalFlash: "You press in close for a 'better look.' The Omega Crystal answers with a containment flash that goes through your visor and out the back of your thoughts. Your suit logs one heartbeat, then static.",
+      riftTouch: "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name."
     },
     rooms: {
       hangar: {
@@ -641,12 +665,12 @@
           terminal: {
             look: "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
             talk: "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
-            use: { death: "demonTaunt", text: "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary." }
+            use: { death: "terminalFries", text: "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary." }
           },
           lanternCrate: {
             look: "A dented supply crate with a UAC latch. Something inside hums politely.",
-            open: { onceFlag:"openedCrate", gain:["plasmaLantern","stimpack"], text:"You pop the latch. Inside: a Plasma Lantern and a Stimpack. UAC still believes in benefits packages." },
-            take: { death: "fan", text:"You try to take the entire crate. Your back files a formal complaint and resigns." }
+            open: { onceFlag:"openedCrate", gain:["stimpack"], addLanterns:1, text:"You pop the latch. Inside: a spare Plasma Lantern charge and a Stimpack. The cell clamps to your harness; UAC still believes in benefits packages." },
+            take: { death: "crateTakeDeath", text:"You try to take the entire crate. Your back files a formal complaint and resigns." }
           }
         }
       },
@@ -699,7 +723,7 @@
           locker:{
             look:"A reinforced locker. The keypad glows red, as if it's embarrassed to be here.",
             open:{ requiresItem:"redKeycard", onceFlag:"openedLocker", gain:["plasmaRifle","beacon"], text:"The keypad accepts the Red Keycard with a cheerful beep. Inside: a Plasma Rifle (uncharged) and an Emergency Beacon." },
-            use:{ death:"fan", text:"You try to 'use' the locker by kicking it. The locker wins." }
+            use:{ death:"lockerKickDeath", text:"You try to 'use' the locker by kicking it. The locker wins." }
           }
         }
       },
@@ -721,7 +745,7 @@
           conduit:{
             look:"A power conduit throbs with contained hell-light. A cell socket is half-melted, as if something was removed in a hurry.",
             take:{ onceFlag:"tookCell", gain:["plasmaCell"], text:"You yank a BFG Power Cell from the conduit. The lights dim, and the facility seems to glare at you." },
-            use:{ death:"badPortal", text:"You jam your fingers into the conduit. The conduit teaches you about electricity in a very hands-on way." }
+            use:{ death:"conduitFry", text:"You jam your fingers into the conduit. The conduit teaches you about electricity in a very hands-on way." }
           }
         }
       },
@@ -747,7 +771,7 @@
               onceFlag:"brokeSeal",
               text:"You crack the Stimpack's seal and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."
             },
-            take:{ death:"demonTaunt", text:"You try to scrape the seal into your pocket. The seal tries to scrape you into the floor." }
+            take:{ death:"sealFlays", text:"You try to scrape the seal into your pocket. The seal tries to scrape you into the floor." }
           },
           door:{
             look:"A heavy blast door. It will not open politely.",
@@ -779,7 +803,7 @@
           crystal:{
             look:"A stable core of argent energy. It doesn't flicker. It *waits.*",
             take:{ onceFlag:"tookCrystal", gain:["omegaCrystal"], text:"You lift the Omega Crystal. It warms your armor like a pleased predator." },
-            use:{ death:"badPortal", text:"You press your face close to the Crystal to 'study it.' Your visor fogs with doom." }
+            use:{ death:"crystalFlash", text:"You press your face close to the Crystal to 'study it.' Your visor fogs with doom." }
           }
         }
       },
@@ -846,7 +870,7 @@
               onceFlag:"openedHatch",
               text:"You swipe the Red Keycard. The hatch unlatches with a thunk that sounds like a coffin approving your paperwork."
             },
-            use:{ death:"fan", text:"You try to pry it open with your hands. The hatch remains employed. You do not." }
+            use:{ death:"hatchPryDeath", text:"You try to pry it open with your hands. The hatch remains employed. You do not." }
           }
         },
         rules:{ gateToNorthRequiresFlag:"openedHatch" }
@@ -876,11 +900,11 @@
               text:"With the Hell Knight distracted or dead, you grab the Neural Link. It is warm, like it knows your name."
             },
             takeFailText:"You step toward the altar. The Hell Knight steps toward *you.* Negotiations conclude.",
-            takeFailDeath:"demonTaunt"
+            takeFailDeath:"altarKnightKills"
           },
           hellKnight:{
             look:"A Hell Knight: muscle, magma, and an HR policy written in screams.",
-            talk:{ death:"demonTaunt", text:"You try a friendly wave. It returns an unfriendly murder." },
+            talk:{ death:"knightKills", text:"You try a friendly wave. It returns an unfriendly murder." },
             use:{
               options:[
                 {
@@ -897,7 +921,7 @@
                   setFlag:"knightGone"
                 }
               ],
-              default:{ death:"demonTaunt", text:"You square up for a fair fight. The Hell Knight accepts. Fairness does not." }
+              default:{ death:"knightKills", text:"You square up for a fair fight. The Hell Knight accepts. Fairness does not." }
             }
           }
         }
@@ -950,7 +974,7 @@
               gain:["serpentineKey"],
               text:"You pop the case. Cold air spills out. You take the Serpentine Key. The warning label silently updates to: TOLD YOU."
             },
-            use:{ death:"demonTaunt", text:"You smash the glass with your elbow. The glass explodes outward *and* inward. Physics is also possessed." }
+            use:{ death:"glassKills", text:"You smash the glass with your elbow. The glass explodes outward *and* inward. Physics is also possessed." }
           }
         }
       },
@@ -971,10 +995,11 @@
         objects:{
           rift:{
             look:"A wound in the world. It bleeds light and laughter.",
-            use:{ death:"badPortal" },
-            take:{ death:"badPortal" },
-            open:{ death:"badPortal" },
-            talk:{ death:"badPortal" }
+            use:{ death:"riftTouch" },
+            take:{ death:"riftTouch" },
+            open:{ death:"riftTouch" },
+            talk:{ death:"riftTouch" },
+            close:{ death:"riftTouch" }
           },
           crux:{
             look:"Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
@@ -987,7 +1012,7 @@
                   setFlag:"gameWon"
                 }
               ],
-              default:{ death:"demonTaunt", text:"You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head." }
+              default:{ death:"cruxKills", text:"You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head." }
             }
           }
         }
@@ -1006,8 +1031,8 @@ HOW TO PLAY
 
 PLASMA LANTERN (TORCH MECHANIC)
 - Each significant action consumes time.
-- After enough actions, a Plasma Lantern charge is spent.
-- If you run out, darkness kills you.
+- You start with 3 lantern charges (max 5 carried); each charge lasts 15 timed actions. The crate adds a charge—it does not go to inventory.
+- When the last charge empties, you are consumed by darkness.
 
 WIN CONDITION
 - Assemble the Soul-Core Breaker and use it on Director Crux in the Hell-Gate Chamber.
@@ -1027,6 +1052,7 @@ WIN CONDITION
     },
     seenRooms: {},
     actions: GAME.meta.startActions,
+    lanternCount: GAME.meta.startLanterns,
     lanterns: GAME.meta.startLanterns,
     alive: true
   });
@@ -1049,6 +1075,7 @@ WIN CONDITION
   const statusLanternEl = $("#statusLantern");
   const statusActionsEl = $("#statusActions");
   const statusThreatEl = $("#statusThreat");
+  const lanternMeterBadge = $("#lanternMeterBadge");
 
   const modalBackdrop = $("#modalBackdrop");
   const modalTitle = $("#modalTitle");
@@ -1102,12 +1129,14 @@ WIN CONDITION
     const cost = actionCost(kind);
     if(cost<=0) return;
     state.actions += cost;
-    // Lantern drains per N actions.
-    const spent = Math.floor(state.actions / GAME.meta.actionsPerLantern);
-    const remaining = GAME.meta.startLanterns - spent;
-    state.lanterns = Math.max(0, remaining);
-    if(state.lanterns <= 0){
+    const ap = GAME.meta.actionsPerLantern;
+    const spent = Math.floor(state.actions / ap);
+    const lc = state.lanternCount ?? GAME.meta.startLanterns;
+    if(spent >= lc){
+      state.lanterns = 0;
       die(GAME.deaths.darkness);
+    } else {
+      state.lanterns = lc - spent;
     }
   }
 
@@ -1323,9 +1352,24 @@ WIN CONDITION
           }
           return;
         }
-        // Special case: with USE active, clicking the same item twice attempts self-combination (assembly shortcut).
+        // Special case: with USE active, soul-core frame self-click can assemble; otherwise treat same click as deselect.
         if(state.cmd === "use" && state.heldItemId === id){
-          tryCombination(id, id);
+          if(id === "soulCoreFrame"){
+            const hadBreaker = hasItem("soulCoreBreaker");
+            tryCombination(id, id);
+            if(!hadBreaker && hasItem("soulCoreBreaker")){
+              // Assembled; held is already soulCoreBreaker inside assembleSoulCoreBreaker.
+            } else {
+              state.heldItemId = null;
+            }
+          } else {
+            const okSelf = tryCombination(id, id);
+            if(!okSelf){
+              state.heldItemId = null;
+              applyAction("inventory");
+            }
+          }
+          render();
           return;
         }
         state.heldItemId = (state.heldItemId===id) ? null : id;
@@ -1399,6 +1443,12 @@ WIN CONDITION
     const threat = !state.alive ? "DEAD" : (flag("gameWon") ? "SEALED" : (state.lanterns<=1 ? "CRITICAL" : "ACTIVE"));
     statusThreatEl.textContent = `THREAT: ${threat}`;
     statusThreatEl.classList.toggle("danger", threat==="CRITICAL" || threat==="DEAD");
+
+    if(lanternMeterBadge){
+      // Remaining charges (includes current lantern); lanternCount is pack size before time burn.
+      const n = state.lanterns ?? 0;
+      lanternMeterBadge.textContent = `${n}/${GAME.meta.lanternMaxCarry}`;
+    }
   }
 
   function renderCursor(){
@@ -1579,6 +1629,12 @@ WIN CONDITION
       return;
     }
     if(handler.requiresFlag && !flag(handler.requiresFlag)){
+      if(cmd==="take" && (handler.takeFailText || handler.takeFailDeath)){
+        if(handler.takeFailText) logLine(handler.takeFailText);
+        if(handler.takeFailDeath) die(GAME.deaths[handler.takeFailDeath] ?? "You die.");
+        else applyAction("interact");
+        return;
+      }
       logWarn("Something else must happen first.");
       applyAction("interact");
       return;
@@ -1600,6 +1656,20 @@ WIN CONDITION
       handler.gain.forEach(id=>{
         if(!hasItem(id)) state.inventory.push(id);
       });
+    }
+
+    if(handler.addLanterns){
+      const mx = GAME.meta.lanternMaxCarry;
+      const lc0 = state.lanternCount ?? GAME.meta.startLanterns;
+      state.lanternCount = lc0;
+      const nl = Math.min(mx, lc0 + handler.addLanterns);
+      if(nl > lc0){
+        state.lanternCount = nl;
+        const sp = Math.floor(state.actions / GAME.meta.actionsPerLantern);
+        state.lanterns = Math.max(0, nl - sp);
+      } else {
+        logWarn("You can't carry any more Plasma Lantern charges.");
+      }
     }
 
     // Stimpack special: if used to break seal, consume it.
@@ -1681,6 +1751,17 @@ WIN CONDITION
       // Minimal validation:
       if(!loaded || typeof loaded !== "object") throw new Error("Bad save");
       state = Object.assign(DEFAULT_STATE(), loaded);
+      const ap0 = GAME.meta.actionsPerLantern;
+      const sp0 = Math.floor(state.actions / ap0);
+      if(state.lanternCount == null || state.lanternCount === undefined){
+        state.lanternCount = Math.min(GAME.meta.lanternMaxCarry, Math.max(1, (state.lanterns ?? GAME.meta.startLanterns) + sp0));
+      }
+      state.lanternCount = Math.min(GAME.meta.lanternMaxCarry, Math.max(1, state.lanternCount));
+      if(sp0 >= state.lanternCount){
+        state.lanterns = 0;
+      } else {
+        state.lanterns = state.lanternCount - sp0;
+      }
       logSys("Loaded save.");
       logLine(roomDef(state.roomId).desc);
       render();

@@ -10,14 +10,24 @@ import pygame
 
 
 # -----------------------------
+# Plasma lantern balance
+# -----------------------------
+# Each lantern charge: this many timed actions (MOVE / world interact) at 100%→0%, then the next charge starts.
+_ACTIONS_PER_LANTERN = 15
+_INITIAL_LANTERN_CHARGES = 3
+_LANTERN_MAX_CARRY = 5
+
+
+# -----------------------------
 # Data (structured like JSON)
 # -----------------------------
 
 GAME: Dict[str, Any] = {
     "meta": {
         "title": "DOOMGATE: The Warlock's Crucible",
-        "actionsPerLantern": 18,
-        "startLanterns": 3,
+        "actionsPerLantern": _ACTIONS_PER_LANTERN,
+        "startLanterns": _INITIAL_LANTERN_CHARGES,
+        "lanternMaxCarry": _LANTERN_MAX_CARRY,
         "startActions": 0,
         "saveFile": "savegame.json",
     },
@@ -32,11 +42,20 @@ GAME: Dict[str, Any] = {
         {"id": "load", "label": "LOAD"},
     ],
     "deaths": {
-        "darkness": "The Plasma Lantern gutters out. Darkness rushes in like a liquid. You hear claws on metal. The last sound you make is a very private, very reasonable regret.",
-        "slime": "You dip your armored glove into the glowing ooze. It wasn't coolant. Your arm seizes, your veins turn to acid, and you explode into a fine, red mist. The slime seems... slightly greener now. Your watch has stopped.",
-        "fan": "You lean into the vent fan to \"check for airflow.\" The fan checks you for structural integrity. You fail the interview.",
-        "demonTaunt": "You try to negotiate with a creature made of hate and teeth. It accepts your offer of \"standing still\" and signs with your spine.",
-        "badPortal": "You poke the Hell rift with your hand because curiosity is a lifestyle. The rift pokes back. Your atoms go on a brief vacation and never return.",
+        "darkness": "The last Plasma Lantern dies. Blackness pours in—not empty dark, but hungry. Something that waited outside the light consumes you whole: no report, no remains, only the quiet proof that darkness here eats its fill.",
+        "slime": "The ooze isn't coolant. The moment you commit, it climbs armor seams like living acid. You don't melt in a movie-monster way—you simply stop being a solvable problem. The pool settles, a shade smugger than before.",
+        "crateTakeDeath": "You try to haul the entire crate like a hero lifting a trophy. Your spine disagrees with your casting. You go down hard on UAC decking and stay down. The hangar keeps breathing. Hours later, something hungry follows the smell of helpless.",
+        "hatchPryDeath": "You heave at the sealed excavation hatch with bare hands. The frame shifts, clamps, and bites. Hydraulics torque shut on meat and bone like a vise with standards. You don't die of drama—you die of being attached to steel that won't open.",
+        "lockerKickDeath": "You USE the locker the way a boot USES a door. Reinforced UAC steel answers. Your knee loses the argument; your leg folds wrong. You end up on the armory floor, vision narrowing. Infection and thirst take the second shift; the demons only need you to still be here.",
+        "terminalFries": "The sigil doesn't stay on the glass—it completes through you. Voltage and something worse ride your nerves until the terminal gets the only reading it wants: zero.",
+        "sealFlays": "You try to peel the blood-seal like a sticker. The glyph renegotiates ownership. It unthreads you layer by layer until there's nothing left to pocket—only a stain that used to be confident.",
+        "glassKills": "Possessed glass doesn't choose an exit vector—it chooses all of them. Shards go through your elbow decision and through you on the return trip. The display case ends up wearing more of you than you take from it.",
+        "knightKills": "The Hell Knight does not take questions. Claws and heat rewrite your posture in one motion. Your rifle never gets to file a dissenting opinion.",
+        "altarKnightKills": "You commit to reaching the altar anyway. The Hell Knight commits to stopping that story. It closes the distance the way a door closes—final, with metal.",
+        "cruxKills": "You bring fists and attitude to a boardroom hosted by a fused demon-executive. Crux answers with talons through the gaps in your armor. The rift applauds in heat.",
+        "conduitFry": "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again—business as usual.",
+        "crystalFlash": "You press in close for a 'better look.' The Omega Crystal answers with a containment flash that goes through your visor and out the back of your thoughts. Your suit logs one heartbeat, then static.",
+        "riftTouch": "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name.",
     },
     "items": {
         "plasmaLantern": {
@@ -142,8 +161,8 @@ GAME: Dict[str, Any] = {
             "",
             "PLASMA LANTERN (TORCH MECHANIC)",
             "- Each significant action consumes time.",
-            "- After enough actions, a lantern charge is spent.",
-            "- If you run out, darkness kills you.",
+            f"- You start with {_INITIAL_LANTERN_CHARGES} lantern charges (max {_LANTERN_MAX_CARRY}); each charge lasts {_ACTIONS_PER_LANTERN} timed actions.",
+            "- Pickups can add charges (not inventory items). When the last charge empties, you are consumed by darkness.",
             "",
             "WIN CONDITION",
             "- Assemble the Soul-Core Breaker and USE it on Director Crux in the Hell-Gate Chamber.",
@@ -180,12 +199,17 @@ GAME["rooms"] = {
             "terminal": {
                 "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
                 "talk": "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
-                "use": {"death": "demonTaunt", "text": "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary."},
+                "use": {"death": "terminalFries", "text": "You pound the terminal like it's a vending machine. The screen flashes a demonic sigil and screams in binary."},
             },
             "lanternCrate": {
                 "look": "A dented supply crate with a UAC latch. Something inside hums politely.",
-                "open": {"onceFlag": "openedCrate", "gain": ["plasmaLantern", "stimpack"], "text": "You pop the latch. Inside: a Plasma Lantern and a Stimpack. UAC still believes in benefits packages."},
-                "take": {"death": "fan", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
+                "open": {
+                    "onceFlag": "openedCrate",
+                    "gain": ["stimpack"],
+                    "addLanterns": 1,
+                    "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a Stimpack. The cell clamps to your harness; UAC still believes in benefits packages.",
+                },
+                "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
             },
         },
     },
@@ -252,7 +276,7 @@ GAME["rooms"] = {
             "conduit": {
                 "look": "A power conduit throbs with contained hell-light. A cell socket is half-melted, as if something was removed in a hurry.",
                 "take": {"onceFlag": "tookCell", "gain": ["plasmaCell"], "text": "You yank a BFG Power Cell from the conduit. The lights dim, and the facility seems to glare at you."},
-                "use": {"death": "badPortal", "text": "You jam your fingers into the conduit. The conduit teaches you about electricity in a very hands-on way."},
+                "use": {"death": "conduitFry", "text": "You jam your fingers into the conduit. The conduit teaches you about electricity in a very hands-on way."},
             }
         },
     },
@@ -274,7 +298,7 @@ GAME["rooms"] = {
             "seal": {
                 "look": "A blood-painted seal mixed with circuitry diagrams. Crux always did love cross-discipline collaboration.",
                 "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You crack the Stimpack's seal and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
-                "take": {"death": "demonTaunt", "text": "You try to scrape the seal into your pocket. The seal tries to scrape you into the floor."},
+                "take": {"death": "sealFlays", "text": "You try to scrape the seal into your pocket. The seal tries to scrape you into the floor."},
             },
             "door": {
                 "look": "A heavy blast door. It will not open politely.",
@@ -299,7 +323,7 @@ GAME["rooms"] = {
             "crystal": {
                 "look": "A stable core of argent energy. It doesn't flicker. It waits.",
                 "take": {"onceFlag": "tookCrystal", "gain": ["omegaCrystal"], "text": "You lift the Omega Crystal. It warms your armor like a pleased predator."},
-                "use": {"death": "badPortal", "text": "You press your face close to the Crystal to 'study it.' Your visor fogs with doom."},
+                "use": {"death": "crystalFlash", "text": "You press your face close to the Crystal to 'study it.' Your visor fogs with doom."},
             }
         },
     },
@@ -360,7 +384,7 @@ GAME["rooms"] = {
             "hatch": {
                 "look": "The lock demands clearance that is, statistically speaking, dead.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedHatch", "text": "You swipe the Red Keycard. The hatch unlatches with a thunk that sounds like a coffin approving your paperwork."},
-                "use": {"death": "fan", "text": "You try to pry it open with your hands. The hatch remains employed. You do not."},
+                "use": {"death": "hatchPryDeath", "text": "You try to pry it open with your hands. The hatch remains employed. You do not."},
             }
         },
     },
@@ -387,12 +411,12 @@ GAME["rooms"] = {
                     "gain": ["neuralLink"],
                     "text": "With the Hell Knight distracted or dead, you grab the Neural Link. It is warm, like it knows your name.",
                     "takeFailText": "You step toward the altar. The Hell Knight steps toward you. Negotiations conclude.",
-                    "takeFailDeath": "demonTaunt",
+                    "takeFailDeath": "altarKnightKills",
                 },
             },
             "hellKnight": {
                 "look": "A Hell Knight: muscle, magma, and an HR policy written in screams.",
-                "talk": {"death": "demonTaunt", "text": "You try a friendly wave. It returns an unfriendly murder."},
+                "talk": {"death": "knightKills", "text": "You try a friendly wave. It returns an unfriendly murder."},
                 "use": {
                     "options": [
                         {
@@ -409,7 +433,7 @@ GAME["rooms"] = {
                             "setFlag": "knightGone",
                         },
                     ],
-                    "default": {"death": "demonTaunt", "text": "You square up for a fair fight. The Hell Knight accepts. Fairness does not."},
+                    "default": {"death": "knightKills", "text": "You square up for a fair fight. The Hell Knight accepts. Fairness does not."},
                 },
             },
         },
@@ -452,12 +476,12 @@ GAME["rooms"] = {
             "case": {
                 "look": "A sealed display case. The lock is simple—because the real lock is probably the curse.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedCase", "gain": ["serpentineKey"], "text": "You pop the case. Cold air spills out. You take the Serpentine Key. The warning label silently updates to: TOLD YOU."},
-                "use": {"death": "demonTaunt", "text": "You smash the glass with your elbow. The glass explodes outward and inward. Physics is also possessed."},
+                "use": {"death": "glassKills", "text": "You smash the glass with your elbow. The glass explodes outward and inward. Physics is also possessed."},
             },
             "locker": {
                 "look": "A reinforced locker. The keypad glows red, as if it's embarrassed to be here.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedLocker", "gain": ["plasmaRifle", "beacon"], "text": "The keypad accepts the Red Keycard with a cheerful beep. Inside: a Plasma Rifle (uncharged) and an Emergency Beacon."},
-                "use": {"death": "fan", "text": "You try to 'use' the locker by kicking it. The locker wins."},
+                "use": {"death": "lockerKickDeath", "text": "You try to 'use' the locker by kicking it. The locker wins."},
             },
         },
     },
@@ -477,11 +501,11 @@ GAME["rooms"] = {
         "objects": {
             "rift": {
                 "look": "A wound in the world. It bleeds light and laughter.",
-                "use": {"death": "badPortal"},
-                "take": {"death": "badPortal"},
-                "open": {"death": "badPortal"},
-                "talk": {"death": "badPortal"},
-                "close": {"death": "badPortal"},
+                "use": {"death": "riftTouch"},
+                "take": {"death": "riftTouch"},
+                "open": {"death": "riftTouch"},
+                "talk": {"death": "riftTouch"},
+                "close": {"death": "riftTouch"},
             },
             "crux": {
                 "look": "Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
@@ -494,7 +518,7 @@ GAME["rooms"] = {
                             "setFlag": "gameWon",
                         }
                     ],
-                    "default": {"death": "demonTaunt", "text": "You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head."},
+                    "default": {"death": "cruxKills", "text": "You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head."},
                 },
             },
         },
@@ -567,10 +591,31 @@ def load_plasma_orb_frames() -> Dict[int, Optional[pygame.Surface]]:
 
 
 def plasma_percent_bucket(fill01: float) -> int:
-    """Map continuous 0..1 charge to display tier 0,10,…,100 for sprite selection."""
-    f = float(clamp(int(fill01 * 1000), 0, 1000)) / 1000.0
-    step = int(round(f * 10.0)) * 10
-    return clamp(step, 0, 100)
+    """Orb art: 100 only when pool full; (90%,100%)→90; (80%,90%]→80; …; (0,10%]→10; 0→0."""
+    f = max(0.0, min(1.0, float(fill01)))
+    if f >= 1.0:
+        return 100
+    if f <= 0.0:
+        return 0
+    if f > 0.9:
+        return 90
+    if f > 0.8:
+        return 80
+    if f > 0.7:
+        return 70
+    if f > 0.6:
+        return 60
+    if f > 0.5:
+        return 50
+    if f > 0.4:
+        return 40
+    if f > 0.3:
+        return 30
+    if f > 0.2:
+        return 20
+    if f > 0.1:
+        return 10
+    return 10
 
 
 def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
@@ -588,15 +633,12 @@ def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int,
 
 
 def plasma_charge_fraction(state: Dict[str, Any]) -> float:
-    """Overall remaining 'lantern energy' 0..1 for the orb fill."""
+    """0..1 charge of the *active* lantern only (resets to 1.0 when a new lantern starts)."""
     ap = GAME["meta"]["actionsPerLantern"]
-    start = GAME["meta"]["startLanterns"]
-    max_e = start * ap
-    if max_e <= 0 or state["lanterns"] <= 0:
+    if ap <= 0 or state["lanterns"] <= 0:
         return 0.0
     seg = state["actions"] % ap
-    total = state["lanterns"] * ap - seg
-    return float(clamp(total, 0, max_e)) / float(max_e)
+    return float(ap - seg) / float(ap)
 
 
 def player_face_frame_index(state: Dict[str, Any]) -> int:
@@ -643,6 +685,9 @@ def draw_plasma_lantern_meter(
     frames: Dict[int, Optional[pygame.Surface]],
     decor: Optional[pygame.Surface],
     colors: Dict[str, Any],
+    lantern_remaining: int,
+    lantern_max: int,
+    font: pygame.font.Font,
 ) -> None:
     pct = plasma_percent_bucket(fill01)
     surf = frames.get(pct) if frames else None
@@ -650,22 +695,27 @@ def draw_plasma_lantern_meter(
         side = max(32, int(r * 2) + 4)
         scaled = pygame.transform.scale(surf, (side, side))
         screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
-        return
-    # Fallback: procedural fill + optional decor (no art assets yet)
-    pygame.draw.circle(screen, (12, 18, 14), (cx, cy), r + 2)
-    pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
-    pygame.draw.circle(screen, (4, 8, 6), (cx, cy), r)
-    inner = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
-    ix, iy = r + 2, r + 2
-    tier01 = pct / 100.0
-    _fill_circle_from_bottom(inner, ix, iy, r - 2, tier01, colors["accent"])
-    screen.blit(inner, (cx - ix, cy - iy))
-    pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
-    if decor is not None:
-        dw = min(r * 2 + 8, decor.get_width())
-        dh = min(r * 2 + 8, decor.get_height())
-        d = pygame.transform.smoothscale(decor, (dw, dh))
-        screen.blit(d, d.get_rect(center=(cx, cy)))
+    else:
+        # Fallback: procedural fill + optional decor (no art assets yet)
+        pygame.draw.circle(screen, (12, 18, 14), (cx, cy), r + 2)
+        pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
+        pygame.draw.circle(screen, (4, 8, 6), (cx, cy), r)
+        inner = pygame.Surface((r * 2 + 4, r * 2 + 4), pygame.SRCALPHA)
+        ix, iy = r + 2, r + 2
+        tier01 = pct / 100.0
+        _fill_circle_from_bottom(inner, ix, iy, r - 2, tier01, colors["accent"])
+        screen.blit(inner, (cx - ix, cy - iy))
+        pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
+        if decor is not None:
+            dw = min(r * 2 + 8, decor.get_width())
+            dh = min(r * 2 + 8, decor.get_height())
+            d = pygame.transform.smoothscale(decor, (dw, dh))
+            screen.blit(d, d.get_rect(center=(cx, cy)))
+    label = f"{lantern_remaining}/{lantern_max}"
+    tx = cx + r - font.size(label)[0] - 2
+    ty = cy - r + 2
+    screen.blit(font.render(label, True, (0, 0, 0)), (tx + 1, ty + 1))
+    screen.blit(font.render(label, True, colors["accent_dim"]), (tx, ty))
 
 
 def draw_player_status_meter(
@@ -708,9 +758,15 @@ def draw_viewport_corner_meters(
     face_frames: List[pygame.Surface],
     plasma_frames: Dict[int, Optional[pygame.Surface]],
     plasma_decor: Optional[pygame.Surface],
+    font_small: pygame.font.Font,
 ) -> None:
     fill = plasma_charge_fraction(state)
-    draw_plasma_lantern_meter(screen, lx, ly, rl, fill, plasma_frames, plasma_decor, colors)
+    lmax = int(GAME["meta"]["lanternMaxCarry"])
+    # Remaining charges (lanternCount − spent); orb label matches status PLASMA LANTERN line.
+    lantern_remaining = int(state.get("lanterns", 0))
+    draw_plasma_lantern_meter(
+        screen, lx, ly, rl, fill, plasma_frames, plasma_decor, colors, lantern_remaining, lmax, font_small
+    )
     fidx = player_face_frame_index(state)
     draw_player_status_meter(screen, rx, ry, rr, fidx, face_frames, colors)
 
@@ -874,6 +930,7 @@ def truncate_after_prefix_to_width(
 
 
 def default_state() -> Dict[str, Any]:
+    n0 = int(GAME["meta"]["startLanterns"])
     return {
         "roomId": "hangar",
         "inventory": [],
@@ -884,7 +941,8 @@ def default_state() -> Dict[str, Any]:
         "roomIntroShown": {},
         "pendingRoomPopup": None,
         "actions": GAME["meta"]["startActions"],
-        "lanterns": GAME["meta"]["startLanterns"],
+        "lanternCount": n0,
+        "lanterns": n0,
         "alive": True,
     }
 
@@ -1325,11 +1383,14 @@ def apply_action(state: Dict[str, Any], kind: str, log: ScrollLog) -> None:
     if cost <= 0:
         return
     state["actions"] += cost
-    spent = state["actions"] // GAME["meta"]["actionsPerLantern"]
-    remaining = GAME["meta"]["startLanterns"] - spent
-    state["lanterns"] = max(0, remaining)
-    if state["lanterns"] <= 0:
+    ap = GAME["meta"]["actionsPerLantern"]
+    spent = state["actions"] // ap
+    lc = int(state.get("lanternCount", GAME["meta"]["startLanterns"]))
+    if spent >= lc:
+        state["lanterns"] = 0
         die(state, log, GAME["deaths"]["darkness"])
+    else:
+        state["lanterns"] = lc - spent
 
 
 def die(state: Dict[str, Any], log: ScrollLog, text: str) -> None:
@@ -1527,20 +1588,20 @@ def resolve_object_action(
         apply_action(state, "interact", log)
         return
     if handler.get("requiresFlag") and not get_flag(state, handler["requiresFlag"]):
+        if cmd == "take" and (handler.get("takeFailText") or handler.get("takeFailDeath")):
+            if handler.get("takeFailText"):
+                log.add(handler["takeFailText"])
+            if handler.get("takeFailDeath"):
+                die(state, log, GAME["deaths"].get(handler["takeFailDeath"], "You die."))
+            else:
+                apply_action(state, "interact", log)
+            return
         log.add("Something else must happen first.", "warn")
         apply_action(state, "interact", log)
         return
     if handler.get("onceFlag") and get_flag(state, handler["onceFlag"]):
         log.add("You've already done that. Repetition is a hobby, not a solution.", "dim")
         apply_action(state, "interact", log)
-        return
-
-    # Special case: altar take fail
-    if cmd == "take" and handler.get("requiresFlag") and not get_flag(state, handler["requiresFlag"]):
-        if handler.get("takeFailText"):
-            log.add(handler["takeFailText"])
-        if handler.get("takeFailDeath"):
-            die(state, log, GAME["deaths"].get(handler["takeFailDeath"], "You die."))
         return
 
     if handler.get("text"):
@@ -1556,6 +1617,20 @@ def resolve_object_action(
             if gid not in state["inventory"] and acquired is not None:
                 acquired.append(gid)
         add_items(state, handler["gain"])
+
+    add_lan = handler.get("addLanterns")
+    if add_lan:
+        mx = int(GAME["meta"]["lanternMaxCarry"])
+        lc0 = int(state.get("lanternCount", GAME["meta"]["startLanterns"]))
+        state["lanternCount"] = lc0
+        nl = min(mx, lc0 + int(add_lan))
+        if nl > lc0:
+            state["lanternCount"] = nl
+            ap = GAME["meta"]["actionsPerLantern"]
+            sp = state["actions"] // ap
+            state["lanterns"] = max(0, nl - sp)
+        else:
+            log.add("You can't carry any more Plasma Lantern charges.", "warn")
 
     if handler.get("consumeHeld") and held:
         remove_items(state, [held])
@@ -1751,6 +1826,24 @@ def main() -> int:
             base.setdefault("roomIntroShown", {})
             base.setdefault("pendingRoomPopup", None)
             base.setdefault("inventory", [])
+            ap_m = GAME["meta"]["actionsPerLantern"]
+            sp_m = base.get("actions", 0) // ap_m
+            if "lanternCount" not in base or base.get("lanternCount") is None:
+                base["lanternCount"] = clamp(
+                    int(base.get("lanterns", GAME["meta"]["startLanterns"])) + sp_m,
+                    1,
+                    int(GAME["meta"]["lanternMaxCarry"]),
+                )
+            base["lanternCount"] = clamp(
+                int(base["lanternCount"]),
+                1,
+                int(GAME["meta"]["lanternMaxCarry"]),
+            )
+            lc_m = base["lanternCount"]
+            if sp_m >= lc_m:
+                base["lanterns"] = 0
+            else:
+                base["lanterns"] = lc_m - sp_m
             state.clear()
             state.update(base)
             log_sys("Loaded save.")
@@ -2322,9 +2415,21 @@ def main() -> int:
                                     apply_action(state, "interact", log)
                                 break
                             if state["cmd"] == "use" and state.get("heldItemId") == iid:
-                                try_combination(state, log, iid, iid, acquired=acquired_inv)
+                                if iid == "soulCoreFrame":
+                                    had_breaker = has_item(state, "soulCoreBreaker")
+                                    try_combination(state, log, iid, iid, acquired=acquired_inv)
+                                    if not had_breaker and has_item(state, "soulCoreBreaker"):
+                                        for gid in acquired_inv:
+                                            item_popup_queue.append(gid)
+                                    else:
+                                        state["heldItemId"] = None
+                                    break
+                                ok_self = try_combination(state, log, iid, iid, acquired=acquired_inv)
                                 for gid in acquired_inv:
                                     item_popup_queue.append(gid)
+                                if not ok_self:
+                                    state["heldItemId"] = None
+                                    apply_action(state, "inventory", log)
                                 break
                             state["heldItemId"] = None if state.get("heldItemId") == iid else iid
                             apply_action(state, "inventory", log)
@@ -2442,6 +2547,7 @@ def main() -> int:
             ui_face_frames,
             plasma_orb_frames,
             plasma_orb_decor,
+            font_small,
         )
         if hovering_hotspot:
             # Bottom strip of the room: just above the viewport frame / panel transition, right of plasma meter
