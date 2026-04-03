@@ -187,6 +187,93 @@ def rect_from_pct(x: float, y: float, w: float, h: float, parent: pygame.Rect) -
     )
 
 
+def screen_rect_to_pct(r: pygame.Rect, parent: pygame.Rect) -> Tuple[float, float, float, float]:
+    rx = r.x - parent.x
+    ry = r.y - parent.y
+    pw = max(1, parent.w)
+    ph = max(1, parent.h)
+    return (
+        100.0 * rx / pw,
+        100.0 * ry / ph,
+        100.0 * r.w / pw,
+        100.0 * r.h / ph,
+    )
+
+
+def clamp_hotspot_pct_rect(l: float, t: float, w: float, h: float) -> Tuple[float, float, float, float]:
+    l = max(0.0, min(float(l), 99.5))
+    t = max(0.0, min(float(t), 99.5))
+    w = max(0.25, min(float(w), 100.0 - l))
+    h = max(0.25, min(float(h), 100.0 - t))
+    return (l, t, w, h)
+
+
+HS_DEBUG_HANDLE_PX = 12
+HS_DEBUG_EDGE_PX = 6
+HOTSPOT_LAYOUT_FILE = "hotspot_layout.json"
+# When False, F3 hotspot overlay only if state["hotspotDebugUnlocked"] (set from Linda terminal later).
+HOTSPOT_DEBUG_F3_FOR_EVERYONE = True
+
+
+def hotspot_layout_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), HOTSPOT_LAYOUT_FILE)
+
+
+def apply_hotspot_layout_overrides(game: Dict[str, Any]) -> None:
+    path = hotspot_layout_path()
+    if not os.path.isfile(path):
+        return
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return
+    rooms_patch = data.get("rooms")
+    if not isinstance(rooms_patch, dict):
+        return
+    for rid, hs_patch in rooms_patch.items():
+        room = game["rooms"].get(rid)
+        if not room or not isinstance(hs_patch, dict):
+            continue
+        by_id = {hs["id"]: hs for hs in room.get("hotspots", [])}
+        for hid, rect in hs_patch.items():
+            hs_obj = by_id.get(str(hid))
+            if not hs_obj or not isinstance(rect, dict):
+                continue
+            for key in ("l", "t", "w", "h"):
+                if key in rect:
+                    hs_obj["rect"][key] = float(rect[key])
+            l, t, w, h = clamp_hotspot_pct_rect(
+                hs_obj["rect"]["l"],
+                hs_obj["rect"]["t"],
+                hs_obj["rect"]["w"],
+                hs_obj["rect"]["h"],
+            )
+            hs_obj["rect"]["l"], hs_obj["rect"]["t"], hs_obj["rect"]["w"], hs_obj["rect"]["h"] = l, t, w, h
+
+
+def save_hotspot_layout_to_disk(game: Dict[str, Any]) -> Tuple[bool, str]:
+    path = hotspot_layout_path()
+    out: Dict[str, Any] = {"version": 1, "rooms": {}}
+    for rid, room in game["rooms"].items():
+        bucket: Dict[str, Any] = {}
+        for hs in room.get("hotspots", []):
+            rr = hs["rect"]
+            bucket[hs["id"]] = {
+                "l": round(float(rr["l"]), 2),
+                "t": round(float(rr["t"]), 2),
+                "w": round(float(rr["w"]), 2),
+                "h": round(float(rr["h"]), 2),
+            }
+        out["rooms"][rid] = bucket
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=2)
+    except OSError as exc:
+        return False, str(exc)
+    return True, path
+
+
 GAME["rooms"] = {
     "hangar": {
         "id": "hangar",
@@ -531,6 +618,8 @@ GAME["rooms"] = {
         },
     },
 }
+
+apply_hotspot_layout_overrides(GAME)
 
 ASSETS_DIR = os.path.join(os.path.dirname(__file__), "assets")
 ROOMS_DIR = os.path.join(ASSETS_DIR, "rooms")
@@ -958,6 +1047,7 @@ def default_state() -> Dict[str, Any]:
         "lanterns": n0,
         "alive": True,
         "godMode": False,
+        "hotspotDebugUnlocked": False,
     }
 
 
@@ -1731,20 +1821,26 @@ def compute_layout(
     gap2 = 8
     rh = right_panel.h - 10
     manual_row = 36
-    # Proportional inventory + map, remainder for commands
-    inv_h = max(72, min(140, int((rh - held_h - manual_row - gap2 * 4) * 0.34)))
-    map_h = max(72, min(140, int((rh - held_h - manual_row - gap2 * 4) * 0.34)))
-    cmd_h = rh - held_h - manual_row - inv_h - map_h - gap2 * 4
+    # Top row: held (left) + minimap (right). Inventory uses former inv+map vertical space.
+    map_w = max(104, min(168, int(right_panel.w * 0.42)))
+    row_h = max(held_h + 4, 96)
+    budget = rh - row_h - manual_row - gap2 * 3
+    inv_h_single = max(72, min(140, int(max(80, budget) * 0.34)))
+    map_h_legacy = max(72, min(140, int(max(80, budget) * 0.34)))
+    inv_h = inv_h_single + gap2 + map_h_legacy
+    cmd_h = budget - inv_h
     if cmd_h < 80:
         shave = 80 - cmd_h
-        inv_h = max(60, inv_h - shave // 2)
-        map_h = max(60, map_h - shave // 2)
-        cmd_h = rh - held_h - manual_row - inv_h - map_h - gap2 * 4
+        inv_h = max(120, inv_h - shave)
+        cmd_h = budget - inv_h
 
-    held_rect = pygame.Rect(right_panel.x, right_panel.y + 5, right_panel.w, held_h)
-    inv_rect = pygame.Rect(right_panel.x, held_rect.bottom + gap2, right_panel.w, inv_h)
-    map_rect = pygame.Rect(right_panel.x, inv_rect.bottom + gap2, right_panel.w, map_h)
-    cmd_rect = pygame.Rect(right_panel.x, map_rect.bottom + gap2, right_panel.w, max(80, cmd_h))
+    y0 = right_panel.y + 5
+    held_w = right_panel.w - map_w - gap2
+    held_y = y0 + (row_h - held_h) // 2
+    held_rect = pygame.Rect(right_panel.x, held_y, held_w, held_h)
+    map_rect = pygame.Rect(held_rect.right + gap2, y0, map_w, row_h)
+    inv_rect = pygame.Rect(right_panel.x, y0 + row_h + gap2, right_panel.w, inv_h)
+    cmd_rect = pygame.Rect(right_panel.x, inv_rect.bottom + gap2, right_panel.w, max(80, cmd_h))
     extra_y = cmd_rect.bottom + gap2
     manual_btn_rect = pygame.Rect(cmd_rect.x, extra_y, (cmd_rect.w - gap2) // 2, manual_row - 4)
     restart_btn_rect = pygame.Rect(
@@ -1859,6 +1955,7 @@ def main() -> int:
         log_sys(f"Saved to {GAME['meta']['saveFile']}.")
 
     def load_game() -> None:
+        nonlocal inv_scroll_px
         path = os.path.join(os.path.dirname(__file__), GAME["meta"]["saveFile"])
         if not os.path.exists(path):
             log.add("No save found.", "warn")
@@ -1878,6 +1975,7 @@ def main() -> int:
             base.setdefault("pendingLindaTerminal", False)
             base.setdefault("lindaWrongCount", 0)
             base.setdefault("godMode", False)
+            base.setdefault("hotspotDebugUnlocked", False)
             base.setdefault("inventory", [])
             ap_m = GAME["meta"]["actionsPerLantern"]
             sp_m = base.get("actions", 0) // ap_m
@@ -1899,13 +1997,14 @@ def main() -> int:
                 base["lanterns"] = lc_m - sp_m
             state.clear()
             state.update(base)
+            inv_scroll_px = 0
             log_sys("Loaded save.")
             log.add(room_def(state["roomId"])["desc"])
         except Exception:
             log.add("Save data is corrupted. (The file got possessed.)", "warn")
 
     def restart() -> None:
-        nonlocal title_screen, intro_done
+        nonlocal title_screen, intro_done, inv_scroll_px
         state.clear()
         state.update(default_state())
         log.lines.clear()
@@ -1913,10 +2012,12 @@ def main() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
-        nonlocal active_room_popup, active_manual_popup, active_linda_popup
+        nonlocal active_room_popup, active_manual_popup, active_linda_popup, hs_debug_drag
         active_room_popup = None
         active_manual_popup = None
         active_linda_popup = None
+        hs_debug_drag = None
+        inv_scroll_px = 0
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
@@ -1932,6 +2033,8 @@ def main() -> int:
     active_room_popup: Optional[Dict[str, Any]] = None
     active_manual_popup: Optional[Dict[str, Any]] = None
     active_linda_popup: Optional[Dict[str, Any]] = None
+    hs_debug_drag: Optional[Dict[str, Any]] = None
+    inv_scroll_px = 0
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
@@ -2037,28 +2140,54 @@ def main() -> int:
     inv_buttons: List[Tuple[str, pygame.Rect]] = []
 
     def draw_inventory() -> None:
-        nonlocal inv_buttons
+        nonlocal inv_buttons, inv_scroll_px
         inv_buttons = []
         inv_rect = layout_state["inv_rect"]
         draw_box(screen, inv_rect, "Inventory")
         items = state["inventory"]
         area = pygame.Rect(inv_rect.x + 10, inv_rect.y + 30, inv_rect.w - 20, inv_rect.h - 40)
         cols_i = 3
-        bw = (area.w - 8 * (cols_i - 1)) // cols_i
         bh = 28
-        for idx, iid in enumerate(items):
-            r = idx // cols_i
-            c = idx % cols_i
-            rect = pygame.Rect(area.x + c * (bw + 8), area.y + r * (bh + 8), bw, bh)
-            inv_buttons.append((iid, rect))
-            selected = state.get("heldItemId") == iid
-            bg = (18, 34, 26) if selected else (10, 14, 12)
-            border = colors["accent"] if selected else colors["border"]
-            pygame.draw.rect(screen, bg, rect, border_radius=8)
-            pygame.draw.rect(screen, border, rect, 1, border_radius=8)
-            screen.blit(font_small.render(item_def(iid)["name"][:18], True, colors["text"]), (rect.x + 8, rect.y + 6))
-        if not items:
-            screen.blit(font_small.render("(empty)", True, colors["muted"]), (area.x, area.y))
+        row_stride = bh + 8
+        nrows = (len(items) + cols_i - 1) // cols_i if items else 0
+        content_h = nrows * row_stride - 8 if nrows > 0 else 0
+        max_scroll = max(0, content_h - area.h)
+        inv_scroll_px = clamp(int(inv_scroll_px), 0, max_scroll)
+        inner_w = area.w - (10 if max_scroll > 0 else 0)
+        bw = (inner_w - 8 * (cols_i - 1)) // cols_i
+
+        old_clip = screen.get_clip()
+        screen.set_clip(area)
+        try:
+            for idx, iid in enumerate(items):
+                r = idx // cols_i
+                c = idx % cols_i
+                row_y = area.y + r * row_stride - inv_scroll_px
+                rect = pygame.Rect(area.x + c * (bw + 8), row_y, bw, bh)
+                inv_buttons.append((iid, rect))
+                if not rect.colliderect(area):
+                    continue
+                selected = state.get("heldItemId") == iid
+                bg = (18, 34, 26) if selected else (10, 14, 12)
+                border = colors["accent"] if selected else colors["border"]
+                pygame.draw.rect(screen, bg, rect, border_radius=8)
+                pygame.draw.rect(screen, border, rect, 1, border_radius=8)
+                screen.blit(
+                    font_small.render(item_def(iid)["name"][:18], True, colors["text"]),
+                    (rect.x + 8, rect.y + 6),
+                )
+            if not items:
+                screen.blit(font_small.render("(empty)", True, colors["muted"]), (area.x, area.y))
+        finally:
+            screen.set_clip(old_clip)
+        if max_scroll > 0:
+            track = pygame.Rect(area.right - 5, area.y, 4, area.h)
+            pygame.draw.rect(screen, (30, 44, 38), track, border_radius=2)
+            thumb_h = max(12, int(area.h * min(1.0, area.h / float(max(content_h, 1)))))
+            prog = inv_scroll_px / float(max_scroll)
+            ty = area.y + int((area.h - thumb_h) * prog)
+            thumb = pygame.Rect(track.x, ty, 4, thumb_h)
+            pygame.draw.rect(screen, (70, 120, 90), thumb, border_radius=2)
 
     def draw_minimap() -> None:
         map_rect = layout_state["map_rect"]
@@ -2110,6 +2239,147 @@ def main() -> int:
             r = rect_from_pct(hs["rect"]["l"], hs["rect"]["t"], hs["rect"]["w"], hs["rect"]["h"], viewport_rect)
             out.append((hs, r, disabled))
         return out
+
+    def hs_debug_try_begin(pos: Tuple[int, int]) -> bool:
+        nonlocal hs_debug_drag
+        if not debug_hotspots:
+            return False
+        pairs = get_hotspot_rects()
+        for hs, r, _disabled in reversed(pairs):
+            hsz = max(6, min(HS_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
+            handle = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
+            if not handle.colliderect(r):
+                handle = pygame.Rect(r.right - min(hsz, r.w), r.bottom - min(hsz, r.h), min(hsz, r.w), min(hsz, r.h))
+            if handle.collidepoint(pos):
+                hs_debug_drag = {
+                    "mode": "resize",
+                    "hs": hs,
+                    "w0": float(max(1, r.w)),
+                    "h0": float(max(1, r.h)),
+                    "tl": (float(r.x), float(r.y)),
+                }
+                return True
+            c = hsz
+            et = max(2, min(HS_DEBUG_EDGE_PX, r.w // 3, r.h // 3))
+            inner_h = r.h - 2 * c
+            inner_w = r.w - 2 * c
+            if inner_h > 0:
+                er = pygame.Rect(r.right - et, r.top + c, et, inner_h)
+                if er.collidepoint(pos):
+                    hs_debug_drag = {
+                        "mode": "resize_e",
+                        "hs": hs,
+                        "l0": float(r.x),
+                        "t0": float(r.y),
+                        "h0": float(r.h),
+                    }
+                    return True
+                el = pygame.Rect(r.x, r.top + c, et, inner_h)
+                if el.collidepoint(pos):
+                    hs_debug_drag = {
+                        "mode": "resize_w",
+                        "hs": hs,
+                        "anchor_right": float(r.right),
+                        "t0": float(r.y),
+                        "h0": float(r.h),
+                    }
+                    return True
+            if inner_w > 0:
+                eb = pygame.Rect(r.left + c, r.bottom - et, inner_w, et)
+                if eb.collidepoint(pos):
+                    hs_debug_drag = {
+                        "mode": "resize_s",
+                        "hs": hs,
+                        "l0": float(r.x),
+                        "t0": float(r.y),
+                        "w0": float(r.w),
+                    }
+                    return True
+                et_top = pygame.Rect(r.left + c, r.y, inner_w, et)
+                if et_top.collidepoint(pos):
+                    hs_debug_drag = {
+                        "mode": "resize_n",
+                        "hs": hs,
+                        "l0": float(r.x),
+                        "w0": float(r.w),
+                        "anchor_bottom": float(r.bottom),
+                    }
+                    return True
+            if r.collidepoint(pos):
+                hs_debug_drag = {
+                    "mode": "move",
+                    "hs": hs,
+                    "grab": (float(pos[0] - r.x), float(pos[1] - r.y)),
+                    "w": r.w,
+                    "h": r.h,
+                }
+                return True
+        return False
+
+    def hs_debug_apply_motion(pos: Tuple[int, int]) -> None:
+        d = hs_debug_drag
+        if d is None:
+            return
+        vr = layout_state["viewport_rect"]
+        hs = d["hs"]
+
+        def rect_to_hs_pct(new_r: pygame.Rect) -> None:
+            new_r.clamp_ip(vr)
+            l, t, wp, hp = screen_rect_to_pct(new_r, vr)
+            l, t, wp, hp = clamp_hotspot_pct_rect(l, t, wp, hp)
+            hs["rect"]["l"], hs["rect"]["t"], hs["rect"]["w"], hs["rect"]["h"] = l, t, wp, hp
+
+        if d["mode"] == "move":
+            gx, gy = d["grab"]
+            new_r = pygame.Rect(int(pos[0] - gx), int(pos[1] - gy), int(d["w"]), int(d["h"]))
+            rect_to_hs_pct(new_r)
+        elif d["mode"] == "resize":
+            tlx, tly = d["tl"]
+            w0, h0 = d["w0"], d["h0"]
+            dx = float(pos[0]) - tlx
+            dy = float(pos[1]) - tly
+            if dx < 2.0 or dy < 2.0:
+                return
+            s = min(dx / w0, dy / h0)
+            s = max(0.08, min(float(s), 24.0))
+            new_w = max(4, int(w0 * s))
+            new_h = max(4, int(h0 * s))
+            new_r = pygame.Rect(int(tlx), int(tly), new_w, new_h)
+            rect_to_hs_pct(new_r)
+        elif d["mode"] == "resize_e":
+            new_w = max(4, int(pos[0] - d["l0"]))
+            new_r = pygame.Rect(int(d["l0"]), int(d["t0"]), new_w, int(d["h0"]))
+            rect_to_hs_pct(new_r)
+        elif d["mode"] == "resize_s":
+            new_h = max(4, int(pos[1] - d["t0"]))
+            new_r = pygame.Rect(int(d["l0"]), int(d["t0"]), int(d["w0"]), new_h)
+            rect_to_hs_pct(new_r)
+        elif d["mode"] == "resize_w":
+            ar = d["anchor_right"]
+            right_bound = max(vr.x, int(ar) - 4)
+            nl = clamp(int(pos[0]), vr.x, right_bound)
+            new_w = max(4, int(ar - nl))
+            new_r = pygame.Rect(nl, int(d["t0"]), new_w, int(d["h0"]))
+            rect_to_hs_pct(new_r)
+        elif d["mode"] == "resize_n":
+            ab = d["anchor_bottom"]
+            bottom_bound = max(vr.y, int(ab) - 4)
+            nt = clamp(int(pos[1]), vr.y, bottom_bound)
+            new_h = max(4, int(ab - nt))
+            new_r = pygame.Rect(int(d["l0"]), nt, int(d["w0"]), new_h)
+            rect_to_hs_pct(new_r)
+
+    def hs_debug_end_drag() -> None:
+        nonlocal hs_debug_drag
+        if hs_debug_drag is None:
+            return
+        hs = hs_debug_drag["hs"]
+        rr = hs["rect"]
+        log_sys(
+            f'HOTSPOT {state["roomId"]}/{hs["id"]} rect: '
+            f'{{"l": {rr["l"]:.2f}, "t": {rr["t"]:.2f}, "w": {rr["w"]:.2f}, "h": {rr["h"]:.2f}}}'
+        )
+        hs_debug_drag = None
 
     def do_hotspot_click(hs: Dict[str, Any]) -> None:
         cmd = current_cmd()
@@ -2622,8 +2892,39 @@ def main() -> int:
                 elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
                     enter_game_from_title()
             elif event.type == pygame.MOUSEWHEEL:
-                if log_rect.collidepoint(mx, my):
+                inv_r = layout_state.get("inv_rect")
+                if (
+                    inv_r
+                    and inv_r.collidepoint(mx, my)
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                    and active_manual_popup is None
+                    and not item_popup_queue
+                ):
+                    inv_scroll_px -= event.y * 36
+                elif log_rect.collidepoint(mx, my):
                     log.wheel(event.y)
+            elif event.type == pygame.MOUSEMOTION:
+                if (
+                    debug_hotspots
+                    and hs_debug_drag is not None
+                    and pygame.mouse.get_pressed()[0]
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                    and active_manual_popup is None
+                    and not item_popup_queue
+                ):
+                    hs_debug_apply_motion(event.pos)
+            elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+                if (
+                    hs_debug_drag is not None
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                ):
+                    hs_debug_end_drag()
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for b in cmd_buttons:
                     if b.rect.collidepoint(event.pos):
@@ -2686,12 +2987,23 @@ def main() -> int:
                         continue
 
                     if viewport_rect.collidepoint(event.pos):
-                        for hs, r, disabled in get_hotspot_rects():
-                            if disabled:
-                                continue
-                            if r.collidepoint(event.pos):
-                                do_hotspot_click(hs)
-                                break
+                        if (
+                            debug_hotspots
+                            and not title_screen
+                            and active_room_popup is None
+                            and active_linda_popup is None
+                            and active_manual_popup is None
+                            and not item_popup_queue
+                            and hs_debug_try_begin(event.pos)
+                        ):
+                            continue
+                        if not debug_hotspots:
+                            for hs, r, disabled in get_hotspot_rects():
+                                if disabled:
+                                    continue
+                                if r.collidepoint(event.pos):
+                                    do_hotspot_click(hs)
+                                    break
 
             elif event.type == pygame.KEYDOWN and event.key == pygame.K_F3:
                 if (
@@ -2701,7 +3013,26 @@ def main() -> int:
                     and active_manual_popup is None
                     and active_linda_popup is None
                 ):
-                    debug_hotspots = not debug_hotspots
+                    if not HOTSPOT_DEBUG_F3_FOR_EVERYONE and not state.get("hotspotDebugUnlocked"):
+                        log.add("Hotspot layout mode is locked.", "dim")
+                    else:
+                        debug_hotspots = not debug_hotspots
+                        if not debug_hotspots:
+                            hs_debug_drag = None
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F4:
+                if (
+                    debug_hotspots
+                    and not title_screen
+                    and not item_popup_queue
+                    and active_room_popup is None
+                    and active_manual_popup is None
+                    and active_linda_popup is None
+                ):
+                    ok, msg = save_hotspot_layout_to_disk(GAME)
+                    if ok:
+                        log_sys(f"Hotspot layout saved to {os.path.basename(msg)} (loaded on next game start).")
+                    else:
+                        log_sys(f"Hotspot layout save failed: {msg}")
 
         if title_screen:
             draw_title_scr()
@@ -2717,7 +3048,7 @@ def main() -> int:
         title = font_ui.render(GAME["meta"]["title"], True, colors["text"])
         screen.blit(title, (pad, pad))
         subtitle = font_small.render(
-            "Shadowgate mechanics • Doom industrial hell aesthetic • Mouse-only • F3: hotspot debug",
+            "Shadowgate • Mouse-only • F3: hotspot editor (move / corner=uniform / edges=axis) • F4: save layout",
             True,
             colors["muted"],
         )
@@ -2774,6 +3105,20 @@ def main() -> int:
                 dbg.fill((25, 255, 106, 40))
                 screen.blit(dbg, r.topleft)
                 pygame.draw.rect(screen, colors["accent"], r, width=1, border_radius=4)
+                hsz = max(6, min(HS_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
+                h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
+                pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
+                c = hsz
+                et = max(2, min(HS_DEBUG_EDGE_PX, r.w // 3, r.h // 3))
+                inner_h = r.h - 2 * c
+                inner_w = r.w - 2 * c
+                edge_col = (130, 210, 255)
+                if inner_h > 0:
+                    pygame.draw.rect(screen, edge_col, pygame.Rect(r.right - et, r.top + c, et, inner_h), 1)
+                    pygame.draw.rect(screen, edge_col, pygame.Rect(r.x, r.top + c, et, inner_h), 1)
+                if inner_w > 0:
+                    pygame.draw.rect(screen, edge_col, pygame.Rect(r.left + c, r.bottom - et, inner_w, et), 1)
+                    pygame.draw.rect(screen, edge_col, pygame.Rect(r.left + c, r.y, inner_w, et), 1)
 
             hover = r.collidepoint((mx, my)) and viewport_rect.collidepoint((mx, my))
             if hover:
