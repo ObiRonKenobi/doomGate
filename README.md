@@ -1,6 +1,6 @@
 # DOOMGATE: The Warlock's Crucible (Python / Pygame)
 
-This is a retro-inspired, Shadowgate-style point-and-click adventure implemented in **Python + Pygame**.
+This is a retro-inspired, Shadowgate-style point-and-click adventure implemented in **Python + Pygame**. (An early single-file browser prototype was removed; all game data and logic live in `main.py`.)
 
 ## Run
 

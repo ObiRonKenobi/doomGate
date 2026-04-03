@@ -385,7 +385,13 @@ GAME["rooms"] = {
         "rules": {"gateToNorthRequiresFlag": "brokeSeal"},
         "hotspots": [
             {"id": "toCorr", "name": "Corridor", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
-            {"id": "door", "name": "Blast Door", "rect": {"l": 46, "t": 18, "w": 18, "h": 30}, "kind": "barrier"},
+            {
+                "id": "toLabs",
+                "name": "Into the Labs",
+                "rect": {"l": 44, "t": 16, "w": 18, "h": 28},
+                "kind": "exit",
+                "data": {"dir": "north"},
+            },
             {"id": "seal", "name": "Blood Seal", "rect": {"l": 50, "t": 54, "w": 14, "h": 16}, "kind": "object"},
         ],
         "objects": {
@@ -393,10 +399,6 @@ GAME["rooms"] = {
                 "look": "A blood-painted seal mixed with circuitry diagrams. Crux always did love cross-discipline collaboration.",
                 "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You crack the Stimpack's seal and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
                 "take": {"death": "sealFlays", "text": "You try to scrape the seal into your pocket. The seal tries to scrape you into the floor."},
-            },
-            "door": {
-                "look": "A heavy blast door. It will not open politely.",
-                "open": {"requiresFlag": "brokeSeal", "text": "The keypad chirps as if grateful. The blast door unlocks with a groan."},
             },
         },
     },
