@@ -30,6 +30,7 @@ A **title screen** appears first: press **any key** or **click** (“Press Any K
 
 ## Art assets (optional)
 
+- **In-game music (looped)**: put **`gameplay.wav`** in **`assets/music/`** (alternatives: `gameplay.ogg`, `gameplay.mp3`, or stems `game` / `ambient` / `ingame` with the same extensions). The **MUSIC** button on the right panel toggles playback.
 - **Title screen (opening)**: put a wide pixel-art image in **`assets/title/`**. Recognized names (any of **`.png` `.jpg` `.jpeg` `.webp` `.bmp`**): `crucible_exterior`, `title`, or `title_screen` — e.g. **`crucible_exterior.jpg`**. Any other image file in that folder is used if the preferred names are missing. The image is scaled to fill the window with a light dim behind the text.
 - **Room backgrounds**: `assets/rooms/<roomId>.png` (e.g. `hangar.png`, `hellGateChamber.png`)
 - **Props** (for objects not drawn in the room): `assets/props/<hotspotId>.png`

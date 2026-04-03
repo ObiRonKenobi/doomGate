@@ -480,7 +480,19 @@ GAME["rooms"] = {
             "hatch": {
                 "look": "The lock demands clearance that is, statistically speaking, dead.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedHatch", "text": "You swipe the Red Keycard. The hatch unlatches with a thunk that sounds like a coffin approving your paperwork."},
-                "use": {"death": "hatchPryDeath", "text": "You try to pry it open with your hands. The hatch remains employed. You do not."},
+                "use": {
+                    "options": [
+                        {
+                            "requiresFlag": "openedHatch",
+                            "text": "You duck through the hatch into the excavation shaft.",
+                            "travelDir": "north",
+                        }
+                    ],
+                    "default": {
+                        "death": "hatchPryDeath",
+                        "text": "You try to pry it open with your hands. The hatch remains employed. You do not.",
+                    },
+                },
             }
         },
     },
@@ -629,10 +641,13 @@ ITEMS_DIR = os.path.join(ASSETS_DIR, "items")
 PROPS_DIR = os.path.join(ASSETS_DIR, "props")
 UI_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "ui"))
 TITLE_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "title"))
+MUSIC_DIR = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "music"))
 # Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
 TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
 # Title menu music in assets/title/ — preferred names first (extensions: .wav .ogg .mp3)
 TITLE_MUSIC_STEMS = ("title_menu", "menu", "title_music", "theme")
+# In-game looped music in assets/music/ — put **gameplay.wav** here (or .ogg/.mp3); see GAMEPLAY_MUSIC_STEMS order
+GAMEPLAY_MUSIC_STEMS = ("gameplay", "game", "ambient", "ingame")
 
 
 def resolve_title_music_path() -> Optional[str]:
@@ -643,6 +658,19 @@ def resolve_title_music_path() -> Optional[str]:
     for stem in TITLE_MUSIC_STEMS:
         for ext in exts:
             p = os.path.normpath(os.path.join(TITLE_DIR, stem + ext))
+            if os.path.isfile(p):
+                return p
+    return None
+
+
+def resolve_gameplay_music_path() -> Optional[str]:
+    """First matching file under assets/music/ (see GAMEPLAY_MUSIC_STEMS). Prefer gameplay.wav."""
+    exts = (".wav", ".ogg", ".mp3")
+    if not os.path.isdir(MUSIC_DIR):
+        return None
+    for stem in GAMEPLAY_MUSIC_STEMS:
+        for ext in exts:
+            p = os.path.normpath(os.path.join(MUSIC_DIR, stem + ext))
             if os.path.isfile(p):
                 return p
     return None
@@ -1690,8 +1718,8 @@ def resolve_object_action(
         apply_action(state, "interact", log)
         return
 
-    # Death handler
-    if handler.get("death"):
+    # Death handler (skip when an option list handles branching — e.g. hatch pry vs. pass through)
+    if handler.get("death") and not handler.get("options"):
         if handler.get("text"):
             log.add(handler["text"])
         die(state, log, GAME["deaths"].get(handler["death"], "You die in a way that is educational to everyone except you."))
@@ -1710,6 +1738,11 @@ def resolve_object_action(
                 continue
             if opt.get("text"):
                 log.add(opt["text"])
+            td = opt.get("travelDir")
+            if td:
+                move(state, log, str(td))
+                announce_victory_if_won(state, log)
+                return
             if opt.get("setFlag"):
                 set_flag(state, opt["setFlag"], True)
             if opt.get("onceFlag"):
@@ -1844,13 +1877,11 @@ def compute_layout(
     inv_rect = pygame.Rect(right_panel.x, y0 + row_h + gap2, right_panel.w, inv_h)
     cmd_rect = pygame.Rect(right_panel.x, inv_rect.bottom + gap2, right_panel.w, max(80, cmd_h))
     extra_y = cmd_rect.bottom + gap2
-    manual_btn_rect = pygame.Rect(cmd_rect.x, extra_y, (cmd_rect.w - gap2) // 2, manual_row - 4)
-    restart_btn_rect = pygame.Rect(
-        cmd_rect.x + (cmd_rect.w - gap2) // 2 + gap2,
-        extra_y,
-        (cmd_rect.w - gap2) // 2,
-        manual_row - 4,
-    )
+    row_btn_h = manual_row - 4
+    w3 = (cmd_rect.w - gap2 * 2) // 3
+    manual_btn_rect = pygame.Rect(cmd_rect.x, extra_y, w3, row_btn_h)
+    music_btn_rect = pygame.Rect(cmd_rect.x + w3 + gap2, extra_y, w3, row_btn_h)
+    restart_btn_rect = pygame.Rect(cmd_rect.x + 2 * (w3 + gap2), extra_y, w3, row_btn_h)
 
     cols = 4
     rows = 2
@@ -1879,6 +1910,7 @@ def compute_layout(
         "map_rect": map_rect,
         "cmd_rect": cmd_rect,
         "manual_btn_rect": manual_btn_rect,
+        "music_btn_rect": music_btn_rect,
         "restart_btn_rect": restart_btn_rect,
         "cmd_button_rects": cmd_button_rects,
     }
@@ -1892,6 +1924,7 @@ def main() -> int:
         pass
     pygame.display.set_caption(GAME["meta"]["title"])
     title_music_path = resolve_title_music_path()
+    gameplay_music_path = resolve_gameplay_music_path()
 
     screen = pygame.display.set_mode((INITIAL_WINDOW_W, INITIAL_WINDOW_H), pygame.RESIZABLE)
     clock = pygame.time.Clock()
@@ -2028,6 +2061,7 @@ def main() -> int:
             state["pendingRoomPopup"] = state["roomId"]
         bg_cache.clear()
         sprite_cache.clear()
+        start_gameplay_music()
 
     title_screen = True
     intro_done = False
@@ -2040,6 +2074,7 @@ def main() -> int:
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
+    gameplay_music_on = True
     ui_face_frames: List[pygame.Surface] = load_ui_player_face_frames()
     plasma_orb_frames: Dict[int, Optional[pygame.Surface]] = load_plasma_orb_frames()
     plasma_orb_decor: Optional[pygame.Surface] = load_plasma_orb_decor()
@@ -2061,9 +2096,27 @@ def main() -> int:
         except Exception:
             pass
 
+    def stop_gameplay_music() -> None:
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    def start_gameplay_music() -> None:
+        if not gameplay_music_path or not gameplay_music_on:
+            return
+        try:
+            if pygame.mixer.get_init() is None:
+                pygame.mixer.init()
+            pygame.mixer.music.load(gameplay_music_path)
+            pygame.mixer.music.play(loops=-1)
+        except Exception:
+            pass
+
     def enter_game_from_title() -> None:
         nonlocal title_screen, intro_done
         stop_title_menu_music()
+        start_gameplay_music()
         title_screen = False
         if not intro_done:
             intro()
@@ -2729,6 +2782,8 @@ def main() -> int:
         for cid, clabel, r in lay["cmd_button_rects"]:
             cmd_buttons.append(Button(r, clabel, cid, active=(cid == state["cmd"])))
         manual_btn = Button(lay["manual_btn_rect"], "MANUAL", "manual")
+        music_lbl = "MUSIC ON" if gameplay_music_on else "MUSIC OFF"
+        music_btn = Button(lay["music_btn_rect"], music_lbl, "music_toggle")
         restart_btn = Button(lay["restart_btn_rect"], "RESTART", "restart", danger=True)
 
         # Activate pending room popup (first-visit flavor text)
@@ -2943,6 +2998,14 @@ def main() -> int:
                 else:
                     if manual_btn.rect.collidepoint(event.pos):
                         open_manual()
+                        apply_action(state, "system", log)
+                        continue
+                    if music_btn.rect.collidepoint(event.pos):
+                        gameplay_music_on = not gameplay_music_on
+                        if gameplay_music_on:
+                            start_gameplay_music()
+                        else:
+                            stop_gameplay_music()
                         apply_action(state, "system", log)
                         continue
                     if restart_btn.rect.collidepoint(event.pos):
@@ -3172,12 +3235,19 @@ def main() -> int:
             b.draw(screen, font_small, colors)
 
         manual_btn.draw(screen, font_small, colors)
+        music_btn.draw(screen, font_small, colors)
         restart_btn.draw(screen, font_small, colors)
 
+        hint_y = status_rect.bottom + 2
         if manual_btn.rect.collidepoint((mx, my)):
-            screen.blit(font_small.render("Click: Manual", True, colors["muted"]), (status_rect.x + 10, status_rect.bottom + 2))
-        if restart_btn.rect.collidepoint((mx, my)):
-            screen.blit(font_small.render("Click: Restart", True, colors["muted"]), (status_rect.x + 120, status_rect.bottom + 2))
+            screen.blit(font_small.render("Click: Manual", True, colors["muted"]), (status_rect.x + 10, hint_y))
+        elif music_btn.rect.collidepoint((mx, my)):
+            screen.blit(
+                font_small.render("Click: toggle in-game music (loops)", True, colors["muted"]),
+                (status_rect.x + 10, hint_y),
+            )
+        elif restart_btn.rect.collidepoint((mx, my)):
+            screen.blit(font_small.render("Click: Restart", True, colors["muted"]), (status_rect.x + 10, hint_y))
 
         if item_popup_queue:
             draw_item_acquire_popup(item_popup_queue[0])
@@ -3191,6 +3261,7 @@ def main() -> int:
         pygame.display.flip()
 
     stop_title_menu_music()
+    stop_gameplay_music()
     pygame.quit()
     return 0
 
