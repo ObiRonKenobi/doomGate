@@ -8,11 +8,12 @@ OPEN target: command OPEN, then click.
 TAKE target: command TAKE, then click.
 COMBINE A + B: HOLD A, command USE, click B in the inventory list.
 1 — Hangar (start)
+Security is east; Main Corridor is north—use the east door first on this route (do not go north to the corridor yet).
 OPEN: UAC Supply Crate → receive Stimpack and a lantern charge (not an item).
-USE: North Door → Main Corridor.
-2 — Red key (Security)
 USE: Security Door (east) → Security Checkpoint.
+2 — Red key (Security)
 TAKE: Security Corpse → Red Access Keycard.
+If you are not in Security, from Hangar USE the Security Door (east).
 3 — Armory (rifle, beacon, serpent key)
 USE: Armory Door (north) → Armory Annex.
 HOLD: Red Access Keycard.
@@ -64,4 +65,4 @@ Optional
 
 Hangar terminal: USE for L.I.N.D.A. (not required for the main quest).
 Quarters Intercom: LOOK / TALK for a hint about the Neural Link.
-Repo note: The Hell-Gate antechamber previously had no workable USE-north exit after unlocking; a proper north exit hotspot is now in main.py so step 34 matches the game. Use SAVE/LOAD as you like so you don’t repeat steps after deaths.
+Repo note: Use SAVE/LOAD as you like so you don’t repeat steps after deaths.
