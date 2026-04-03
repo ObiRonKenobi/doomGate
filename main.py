@@ -210,6 +210,8 @@ def clamp_hotspot_pct_rect(l: float, t: float, w: float, h: float) -> Tuple[floa
 
 HS_DEBUG_HANDLE_PX = 12
 HS_DEBUG_EDGE_PX = 6
+UI_DEBUG_HANDLE_PX = 12
+UI_DEBUG_EDGE_PX = 6
 HOTSPOT_LAYOUT_FILE = "hotspot_layout.json"
 # When False, F3 hotspot overlay only if state["hotspotDebugUnlocked"] (set from Linda terminal later).
 HOTSPOT_DEBUG_F3_FOR_EVERYONE = True
@@ -217,6 +219,11 @@ HOTSPOT_DEBUG_F3_FOR_EVERYONE = True
 
 def hotspot_layout_path() -> str:
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), HOTSPOT_LAYOUT_FILE)
+
+
+def room_map_floor(room: Dict[str, Any]) -> int:
+    """Plasma-deck = 0, dig / antechamber basement = -1, hell-gate summit = +1."""
+    return int(room.get("mapFloor", 0))
 
 
 def apply_hotspot_layout_overrides(game: Dict[str, Any]) -> None:
@@ -274,12 +281,342 @@ def save_hotspot_layout_to_disk(game: Dict[str, Any]) -> Tuple[bool, str]:
     return True, path
 
 
+UI_LAYOUT_FILE = "ui_layout.json"
+UI_LAYOUT_DEBUG_F5_FOR_EVERYONE = True
+
+
+def ui_layout_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), UI_LAYOUT_FILE)
+
+
+def default_ui_layout_overrides() -> Dict[str, Any]:
+    return {
+        "version": 2,
+        "regions": {},
+        "map_dx": 0,
+        "map_dy": 0,
+        "map_w": None,
+        "map_h": None,
+        "held_h": None,
+    }
+
+
+def load_ui_layout_overrides() -> Dict[str, Any]:
+    ov = default_ui_layout_overrides()
+    path = ui_layout_path()
+    if not os.path.isfile(path):
+        return ov
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return ov
+    if not isinstance(data, dict):
+        return ov
+    if "regions" in data and isinstance(data["regions"], dict):
+        ov["regions"] = dict(data["regions"])
+    for k in ("map_dx", "map_dy", "map_w", "map_h", "held_h"):
+        if k in data:
+            ov[k] = data[k]
+    if "version" in data:
+        ov["version"] = data["version"]
+    return ov
+
+
+def save_ui_layout_overrides(ov: Dict[str, Any]) -> Tuple[bool, str]:
+    path = ui_layout_path()
+    reg = ov.get("regions")
+    if isinstance(reg, dict) and len(reg) > 0:
+        out: Dict[str, Any] = {"version": 2, "regions": {k: dict(v) for k, v in reg.items() if isinstance(v, dict)}}
+    else:
+        out = {
+            "version": 1,
+            "map_dx": int(ov.get("map_dx", 0)),
+            "map_dy": int(ov.get("map_dy", 0)),
+        }
+        for k in ("map_w", "map_h", "held_h"):
+            v = ov.get(k)
+            if v is not None:
+                out[k] = int(v)
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(out, f, indent=2)
+    except OSError as exc:
+        return False, str(exc)
+    return True, path
+
+
+def _apply_legacy_map_held_overrides(lay: Dict[str, Any], ov: Dict[str, Any]) -> None:
+    rp = lay["right_panel"]
+    gap2 = int(lay["layout_gap2"])
+    y0 = int(lay["top_row_y0"])
+    base_row_h = int(lay["top_row_h"])
+    base_mr = lay["map_rect"]
+    base_hr = lay["held_rect"]
+    mw = int(ov["map_w"]) if ov.get("map_w") is not None else int(base_mr.w)
+    mh = int(ov["map_h"]) if ov.get("map_h") is not None else int(base_mr.h)
+    hh = int(ov["held_h"]) if ov.get("held_h") is not None else int(base_hr.h)
+    mh = max(48, min(mh, base_row_h))
+    hh = max(36, min(hh, base_row_h))
+    mw = max(80, min(mw, max(80, rp.w - gap2 - 48)))
+    mdx = int(ov.get("map_dx", 0))
+    mdy = int(ov.get("map_dy", 0))
+    row_h = base_row_h
+    ref_y = y0 + (row_h - mh) // 2
+    map_x = rp.right - mw + mdx
+    map_y = ref_y + mdy
+    min_held = 48
+    map_x_min = rp.x + min_held + gap2
+    map_x_max = rp.right - mw
+    if map_x_max < map_x_min:
+        map_x_max = map_x_min
+    map_x = clamp(map_x, map_x_min, map_x_max)
+    held_w = map_x - gap2 - rp.x
+    held_y = y0 + (row_h - hh) // 2
+    map_y = clamp(map_y, y0, y0 + row_h - mh)
+    lay["map_rect"] = pygame.Rect(map_x, map_y, mw, mh)
+    lay["held_rect"] = pygame.Rect(rp.x, held_y, max(40, held_w), hh)
+
+
+def apply_ui_layout_overrides(lay: Dict[str, Any], ov: Optional[Dict[str, Any]]) -> None:
+    if not ov:
+        return
+    reg = ov.get("regions")
+    if isinstance(reg, dict) and len(reg) > 0:
+        W, H = lay["W"], lay["H"]
+        pad = lay["pad"]
+        title_bar_h = lay["title_bar_h"]
+        gap = int(lay.get("gap_main", 8))
+        gap2 = 8
+        content = ui_window_content_rect(W, H, pad, title_bar_h)
+        bottom_rect = lay["bottom_rect"]
+
+        if ui_rect_from_dict(reg.get("viewport")) is not None:
+            vr = ui_rect_from_dict(reg["viewport"])
+            assert vr is not None
+            vr = ui_clamp_rect_in_parent(vr, content, min_w=120, min_h=100)
+            lay["viewport_rect"] = vr
+            by = vr.bottom + gap
+            bottom_rect = pygame.Rect(pad, by, W - pad * 2, H - by - pad)
+            lay["bottom_rect"] = bottom_rect
+
+        if ui_rect_from_dict(reg.get("text_panel")) is not None:
+            tp = ui_rect_from_dict(reg["text_panel"])
+            assert tp is not None
+            lay["text_panel"] = ui_clamp_rect_in_parent(tp, bottom_rect, min_w=120, min_h=80)
+        else:
+            tw = int(bottom_rect.w * 0.56)
+            lay["text_panel"] = pygame.Rect(bottom_rect.x, bottom_rect.y, tw, bottom_rect.h)
+
+        tp = lay["text_panel"]
+        if ui_rect_from_dict(reg.get("right_panel")) is not None:
+            rp_r = ui_rect_from_dict(reg["right_panel"])
+            assert rp_r is not None
+            lay["right_panel"] = ui_clamp_rect_in_parent(rp_r, bottom_rect, min_w=160, min_h=120)
+        else:
+            lay["right_panel"] = pygame.Rect(tp.right + gap, bottom_rect.y, bottom_rect.right - tp.right - gap, bottom_rect.h)
+
+        tp = lay["text_panel"]
+        if ui_rect_from_dict(reg.get("status")) is not None:
+            sr = ui_rect_from_dict(reg["status"])
+            assert sr is not None
+            lay["status_rect"] = ui_clamp_rect_in_parent(sr, tp, min_w=80, min_h=22)
+        else:
+            lay["status_rect"] = pygame.Rect(tp.x + 10, tp.y + 10, tp.w - 20, 26)
+        if ui_rect_from_dict(reg.get("log")) is not None:
+            lr = ui_rect_from_dict(reg["log"])
+            assert lr is not None
+            lay["log_rect"] = ui_clamp_rect_in_parent(lr, tp, min_w=80, min_h=40)
+        else:
+            st = lay["status_rect"]
+            log_top = st.bottom + 10
+            lay["log_rect"] = pygame.Rect(tp.x + 10, log_top, tp.w - 20, tp.bottom - log_top - 10)
+
+        rp = lay["right_panel"]
+        ri = layout_right_internals(rp, GAME["commands"])
+        lay["layout_gap2"] = gap2
+        lay["top_row_y0"] = ri["top_row_y0"]
+        lay["top_row_h"] = ri["top_row_h"]
+        for k in ("manual_btn_rect", "music_btn_rect", "restart_btn_rect", "cmd_button_rects"):
+            lay[k] = ri[k]
+        for rkey, lkey in (("held", "held_rect"), ("map", "map_rect"), ("inv", "inv_rect"), ("cmd", "cmd_rect")):
+            lay[lkey] = ri[lkey]
+
+        rp = lay["right_panel"]
+        mw, mh = UI_EDIT_REGION_MINS["map"]
+        hw, hh = UI_EDIT_REGION_MINS["held"]
+        iw, ih = UI_EDIT_REGION_MINS["inv"]
+        cw, ch = UI_EDIT_REGION_MINS["cmd"]
+        if ui_rect_from_dict(reg.get("held")) is not None:
+            hr = ui_rect_from_dict(reg["held"])
+            assert hr is not None
+            lay["held_rect"] = ui_clamp_rect_in_parent(hr, rp, min_w=hw, min_h=hh)
+        if ui_rect_from_dict(reg.get("map")) is not None:
+            mr = ui_rect_from_dict(reg["map"])
+            assert mr is not None
+            lay["map_rect"] = ui_clamp_rect_in_parent(mr, rp, min_w=mw, min_h=mh)
+        if ui_rect_from_dict(reg.get("inv")) is not None:
+            ir_ = ui_rect_from_dict(reg["inv"])
+            assert ir_ is not None
+            lay["inv_rect"] = ui_clamp_rect_in_parent(ir_, rp, min_w=iw, min_h=ih)
+        if ui_rect_from_dict(reg.get("cmd")) is not None:
+            cr = ui_rect_from_dict(reg["cmd"])
+            assert cr is not None
+            lay["cmd_rect"] = ui_clamp_rect_in_parent(cr, rp, min_w=cw, min_h=ch)
+
+        cmd_r = lay["cmd_rect"]
+        manual_row = 36
+        row_btn_h = manual_row - 4
+        g2 = gap2
+        w3 = (cmd_r.w - g2 * 2) // 3
+        extra_y = cmd_r.bottom + g2
+        lay["manual_btn_rect"] = pygame.Rect(cmd_r.x, extra_y, w3, row_btn_h)
+        lay["music_btn_rect"] = pygame.Rect(cmd_r.x + w3 + g2, extra_y, w3, row_btn_h)
+        lay["restart_btn_rect"] = pygame.Rect(cmd_r.x + 2 * (w3 + g2), extra_y, w3, row_btn_h)
+
+        cols = 4
+        rows = 2
+        btn_h = max(26, min(36, (cmd_r.h - g2) // rows - g2))
+        btn_w = (cmd_r.w - g2 * (cols - 1)) // cols
+        cmd_button_rects: List[Tuple[str, str, pygame.Rect]] = []
+        for i, c in enumerate(GAME["commands"]):
+            r_i = i // cols
+            cc = i % cols
+            bx = cmd_r.x + cc * (btn_w + g2)
+            by_c = cmd_r.y + r_i * (btn_h + g2)
+            cmd_button_rects.append((c["id"], c["label"], pygame.Rect(bx, by_c, btn_w, btn_h)))
+        lay["cmd_button_rects"] = cmd_button_rects
+        return
+
+    legacy = (
+        ov.get("map_w") is not None
+        or ov.get("map_h") is not None
+        or ov.get("held_h") is not None
+        or int(ov.get("map_dx", 0)) != 0
+        or int(ov.get("map_dy", 0)) != 0
+    )
+    if legacy:
+        _apply_legacy_map_held_overrides(lay, ov)
+
+
+def sync_ui_layout_overrides_from_lay(lay: Dict[str, Any], ov: Dict[str, Any]) -> None:
+    reg: Dict[str, Any] = {}
+    for region_key, lay_key, _ in UI_EDIT_REGION_ORDER:
+        rr = lay.get(lay_key)
+        if isinstance(rr, pygame.Rect):
+            reg[region_key] = ui_rect_to_dict(rr)
+    ov["regions"] = reg
+    ov["version"] = 2
+
+
+AUDIO_SETTINGS_FILE = "audio_settings.json"
+
+
+def audio_settings_path() -> str:
+    return os.path.join(os.path.dirname(os.path.abspath(__file__)), AUDIO_SETTINGS_FILE)
+
+
+def load_audio_settings() -> Dict[str, Any]:
+    out = {"music_volume": 1.0}
+    path = audio_settings_path()
+    if not os.path.isfile(path):
+        return out
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = json.load(f)
+    except (OSError, json.JSONDecodeError):
+        return out
+    if not isinstance(data, dict):
+        return out
+    v = data.get("music_volume")
+    if isinstance(v, (int, float)):
+        out["music_volume"] = max(0.0, min(1.0, float(v)))
+    return out
+
+
+def save_audio_settings(settings: Dict[str, Any]) -> None:
+    path = audio_settings_path()
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump(
+                {"music_volume": round(float(settings.get("music_volume", 1.0)), 4)},
+                f,
+                indent=2,
+            )
+    except OSError:
+        pass
+
+
+MUSIC_VOL_HOVER_DELAY_MS = 1000
+
+
+def music_vol_popup_rect(music_btn: pygame.Rect, lay: Dict[str, Any]) -> pygame.Rect:
+    """Place the popup so it does not overlap the command row (SAVE / LOAD / verbs)."""
+    W, H = lay["W"], lay["H"]
+    pad = lay["pad"]
+    tb = lay["title_bar_h"]
+    cmd_rect = lay["cmd_rect"]
+    pw, ph = 184, 48
+    x = int(music_btn.centerx - pw // 2)
+    top_min = pad + tb + 4
+    y_above = int(music_btn.y - ph - 8)
+    min_clear_above = int(cmd_rect.bottom + 8)
+    if y_above >= min_clear_above and y_above >= top_min:
+        y = y_above
+    else:
+        y = int(music_btn.bottom + 8)
+    y = clamp(y, top_min, H - pad - ph)
+    x = clamp(x, pad, W - pad - pw)
+    pr = pygame.Rect(x, y, pw, ph)
+    if pr.colliderect(cmd_rect.inflate(0, 4)):
+        y = int(max(music_btn.bottom + 8, cmd_rect.bottom + 8))
+        y = clamp(y, top_min, H - pad - ph)
+        pr = pygame.Rect(x, y, pw, ph)
+    return pr
+
+
+def music_vol_track_inner(popup: pygame.Rect) -> pygame.Rect:
+    return pygame.Rect(popup.x + 12, popup.y + 30, popup.w - 24, 10)
+
+
+def music_volume_from_track_x(track: pygame.Rect, x: float) -> float:
+    return max(0.0, min(1.0, (float(x) - track.x) / max(1, track.w)))
+
+
+def draw_music_volume_popup(
+    screen: pygame.Surface,
+    popup: pygame.Rect,
+    volume: float,
+    colors: Dict[str, Any],
+    font: pygame.font.Font,
+) -> None:
+    pygame.draw.rect(screen, colors["panel2"], popup, border_radius=8)
+    pygame.draw.rect(screen, colors["border"], popup, width=1, border_radius=8)
+    screen.blit(font.render("Music volume", True, colors["text"]), (popup.x + 12, popup.y + 8))
+    tr = music_vol_track_inner(popup)
+    pygame.draw.rect(screen, (14, 20, 16), tr, border_radius=4)
+    fill_w = max(0, int(round(tr.w * volume)))
+    if fill_w > 0:
+        pygame.draw.rect(screen, colors["accent_dim"], pygame.Rect(tr.x, tr.y, fill_w, tr.h), border_radius=4)
+    pygame.draw.rect(screen, colors["accent"], tr, width=1, border_radius=4)
+    cx = int(tr.x + volume * tr.w)
+    cx = clamp(cx, tr.x + 3, tr.x + tr.w - 3)
+    knob = pygame.Rect(0, 0, 12, 20)
+    knob.center = (cx, tr.centery)
+    pygame.draw.rect(screen, colors["text"], knob, border_radius=5)
+    pygame.draw.rect(screen, colors["accent"], knob, width=1, border_radius=5)
+    pct = int(round(volume * 100))
+    pct_s = font.render(f"{pct}%", True, colors["muted"])
+    screen.blit(pct_s, (popup.right - pct_s.get_width() - 12, popup.y + 8))
+
+
 GAME["rooms"] = {
     "hangar": {
         "id": "hangar",
         "name": "Hangar Intake — The Crucible Facility",
         "theme": "hangar",
         "mapPos": [0, 2],
+        "mapFloor": 0,
         "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site—an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
         "desc": "You stand in the hangar intake of the Crucible Facility. UAC steel ribs arch overhead, but the walls are scored with runes that look like they were etched by a knife made of screaming.\n\nA flickering terminal repeats a single line: \"L.I.N.D.A. ONLINE\".\nThe air smells of ozone, blood, and corporate denial.",
         "exits": {"north": "corridor", "east": "security"},
@@ -312,6 +649,7 @@ GAME["rooms"] = {
         "name": "Main Corridor — Steel & Sigils",
         "theme": "corridor",
         "mapPos": [1, 2],
+        "mapFloor": 0,
         "enterText": "The facility’s spine is still lit, still humming—like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
         "desc": "A long corridor of brushed metal and bad decisions. Emergency lights pulse red. Demonic glyphs crawl over the UAC logos as if mocking the concept of branding.\n\nTo the north, a blast door leads to the Research Labs. To the east, the Living Quarters stink of old fear.",
         "exits": {"south": "hangar", "north": "labsDoor", "east": "quarters"},
@@ -337,6 +675,7 @@ GAME["rooms"] = {
         "name": "Security Checkpoint — Locked Teeth",
         "theme": "security",
         "mapPos": [0, 3],
+        "mapFloor": 0,
         "enterText": "The checkpoint tells its own story: panic, protocol, and then something stronger than both.\n\nSomeone tried to hold the line here. Someone failed. Whatever got in didn't need a keycard.",
         "desc": "A security checkpoint with overturned chairs and a shattered glass window. The keypad panel is smeared with something that used to have hopes.\n\nA side passage leads deeper into maintenance.",
         "exits": {"west": "hangar", "east": "maintenance", "north": "armory"},
@@ -358,6 +697,7 @@ GAME["rooms"] = {
         "name": "Maintenance Ductworks — The Belly of UAC",
         "theme": "maintenance",
         "mapPos": [1, 3],
+        "mapFloor": 0,
         "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry—drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
         "desc": "Pipes. Steam. The sound of something large breathing where no lungs should be. A broken panel reveals a power conduit pulsing with argent.\n\nA sealed hatch to the north is marked: EXCAVATION.",
         "exits": {"west": "security", "north": "excavationHatch"},
@@ -379,6 +719,7 @@ GAME["rooms"] = {
         "name": "Research Labs — Blast Door",
         "theme": "labsDoor",
         "mapPos": [2, 2],
+        "mapFloor": 0,
         "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols—and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
         "desc": "A blast door blocks the Research Labs. A demonic seal has been painted over the keypad, like graffiti but with consequences.\n\nThe seal looks... unfinished.",
         "exits": {"south": "corridor", "north": "labs"},
@@ -407,6 +748,7 @@ GAME["rooms"] = {
         "name": "Research Labs — Argent Containment",
         "theme": "labs",
         "mapPos": [3, 2],
+        "mapFloor": 0,
         "enterText": "The labs smell like antiseptic and sulfur—cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
         "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur—like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
         "exits": {"south": "labsDoor", "east": "templeLift"},
@@ -428,6 +770,7 @@ GAME["rooms"] = {
         "name": "Living Quarters — Echoes of Payroll",
         "theme": "quarters",
         "mapPos": [2, 3],
+        "mapFloor": 0,
         "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol—over and over—like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
         "desc": "Bunks. Lockers. A poster about workplace safety that has been rewritten in blood. The intercom whispers static prayers.\n\nA cracked wall panel reveals a hidden recess.",
         "exits": {"west": "corridor", "east": "templeLift"},
@@ -453,6 +796,7 @@ GAME["rooms"] = {
         "name": "Service Lift — Down to the Ruins",
         "theme": "lift",
         "mapPos": [3, 3],
+        "mapFloor": 0,
         "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nCrux went down. The artifacts went down. The ruin below predates Mars—and it’s awake enough to notice you.",
         "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
         "exits": {"west": "quarters", "east": "labs", "down": "excavation", "north": "hellGateAntechamber"},
@@ -468,6 +812,7 @@ GAME["rooms"] = {
         "name": "Excavation Hatch — Sealed",
         "theme": "hatch",
         "mapPos": [2, 4],
+        "mapFloor": -1,
         "enterText": "The hatch is a boundary line—someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
         "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nA biometric lock blinks an angry red.",
         "exits": {"south": "maintenance", "north": "excavation"},
@@ -501,6 +846,7 @@ GAME["rooms"] = {
         "name": "Excavation Site — Temple Breach",
         "theme": "excavation",
         "mapPos": [3, 4],
+        "mapFloor": -1,
         "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link—an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
         "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
         "exits": {"south": "excavationHatch", "north": "hellGateAntechamber"},
@@ -551,13 +897,20 @@ GAME["rooms"] = {
         "name": "Hell-Gate Antechamber — The Threshold",
         "theme": "antechamber",
         "mapPos": [4, 4],
+        "mapFloor": -1,
         "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out—it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
         "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
         "exits": {"south": "templeLift", "north": "hellGateChamber"},
         "rules": {"gateToNorthRequiresFlag": "unlockedGate"},
         "hotspots": [
             {"id": "toLift", "name": "Lift", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
-            {"id": "toChamber", "name": "Demonic Door", "rect": {"l": 44, "t": 18, "w": 18, "h": 30}, "kind": "barrier"},
+            {
+                "id": "toChamber",
+                "name": "Into the Hell-Gate",
+                "rect": {"l": 44, "t": 16, "w": 18, "h": 28},
+                "kind": "exit",
+                "data": {"dir": "north"},
+            },
             {"id": "serpentLock", "name": "Serpentine Lock", "rect": {"l": 50, "t": 52, "w": 12, "h": 14}, "kind": "object"},
         ],
         "objects": {
@@ -572,6 +925,7 @@ GAME["rooms"] = {
         "name": "Armory Annex — Old Toys",
         "theme": "armory",
         "mapPos": [1, 4],
+        "mapFloor": 0,
         "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong—too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
         "desc": "A small armory annex. Most racks are empty. A reinforced weapons locker sits behind a red-lit keypad. One display case remains intact, holding a demonic-metal key that pulses like a living bruise.\n\nThe case has a UAC warning label: DO NOT OPEN. As if that ever worked.",
         "exits": {"south": "security"},
@@ -598,6 +952,7 @@ GAME["rooms"] = {
         "name": "Hell-Gate Chamber — The Crucible",
         "theme": "hellgate",
         "mapPos": [4, 3],
+        "mapFloor": 1,
         "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out—before the Titan decides you’re interesting.",
         "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity—robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
         "exits": {"south": "hellGateAntechamber"},
@@ -1083,6 +1438,221 @@ def default_state() -> Dict[str, Any]:
 
 def clamp(v: int, lo: int, hi: int) -> int:
     return max(lo, min(hi, v))
+
+
+def layout_right_internals(
+    right_panel: pygame.Rect,
+    commands: List[Dict[str, Any]],
+    *,
+    manual_row: int = 36,
+) -> Dict[str, Any]:
+    """Place Held, minimap, inventory, command grid inside the right column (matches compute_layout)."""
+    held_h = 52
+    gap2 = 8
+    y0 = right_panel.y + 5
+    rh = right_panel.h - 10
+    map_w = max(128, min(252, int(right_panel.w * 0.58)))
+    row_h = max(held_h + 8, 112)
+    budget = rh - row_h - manual_row - gap2 * 3
+    inv_h_single = max(72, min(140, int(max(80, budget) * 0.34)))
+    map_h_legacy = max(72, min(140, int(max(80, budget) * 0.34)))
+    inv_h = inv_h_single + gap2 + map_h_legacy
+    cmd_h = budget - inv_h
+    if cmd_h < 80:
+        shave = 80 - cmd_h
+        inv_h = max(120, inv_h - shave)
+        cmd_h = budget - inv_h
+
+    held_y = y0 + (row_h - held_h) // 2
+    map_rect = pygame.Rect(right_panel.right - map_w, y0, map_w, row_h)
+    held_w = map_rect.x - gap2 - right_panel.x
+    held_rect = pygame.Rect(right_panel.x, held_y, held_w, held_h)
+    inv_rect = pygame.Rect(right_panel.x, y0 + row_h + gap2, right_panel.w, inv_h)
+    cmd_rect = pygame.Rect(right_panel.x, inv_rect.bottom + gap2, right_panel.w, max(80, cmd_h))
+    extra_y = cmd_rect.bottom + gap2
+    row_btn_h = manual_row - 4
+    w3 = (cmd_rect.w - gap2 * 2) // 3
+    manual_btn_rect = pygame.Rect(cmd_rect.x, extra_y, w3, row_btn_h)
+    music_btn_rect = pygame.Rect(cmd_rect.x + w3 + gap2, extra_y, w3, row_btn_h)
+    restart_btn_rect = pygame.Rect(cmd_rect.x + 2 * (w3 + gap2), extra_y, w3, row_btn_h)
+
+    cols = 4
+    rows = 2
+    btn_h = max(26, min(36, (cmd_rect.h - gap2) // rows - gap2))
+    btn_w = (cmd_rect.w - gap2 * (cols - 1)) // cols
+    cmd_button_rects: List[Tuple[str, str, pygame.Rect]] = []
+    for i, c in enumerate(commands):
+        r_i = i // cols
+        cc = i % cols
+        bx = cmd_rect.x + cc * (btn_w + gap2)
+        by_c = cmd_rect.y + r_i * (btn_h + gap2)
+        cmd_button_rects.append((c["id"], c["label"], pygame.Rect(bx, by_c, btn_w, btn_h)))
+
+    return {
+        "held_rect": held_rect,
+        "map_rect": map_rect,
+        "inv_rect": inv_rect,
+        "cmd_rect": cmd_rect,
+        "manual_btn_rect": manual_btn_rect,
+        "music_btn_rect": music_btn_rect,
+        "restart_btn_rect": restart_btn_rect,
+        "cmd_button_rects": cmd_button_rects,
+        "top_row_y0": y0,
+        "top_row_h": row_h,
+    }
+
+
+def ui_rect_to_dict(r: pygame.Rect) -> Dict[str, int]:
+    return {"x": int(r.x), "y": int(r.y), "w": int(r.w), "h": int(r.h)}
+
+
+def ui_rect_from_dict(d: Optional[Dict[str, Any]]) -> Optional[pygame.Rect]:
+    if not d or not isinstance(d, dict):
+        return None
+    try:
+        return pygame.Rect(int(d["x"]), int(d["y"]), int(d["w"]), int(d["h"]))
+    except (KeyError, TypeError, ValueError):
+        return None
+
+
+def ui_clamp_rect_in_parent(r: pygame.Rect, parent: pygame.Rect, *, min_w: int = 4, min_h: int = 4) -> pygame.Rect:
+    o = pygame.Rect(r)
+    o.w = max(min_w, min(o.w, parent.w))
+    o.h = max(min_h, min(o.h, parent.h))
+    o.x = clamp(int(o.x), parent.x, parent.right - o.w)
+    o.y = clamp(int(o.y), parent.y, parent.bottom - o.h)
+    return o
+
+
+def ui_window_content_rect(W: int, H: int, pad: int, title_bar_h: int) -> pygame.Rect:
+    inner_top = pad + title_bar_h
+    return pygame.Rect(pad, inner_top, W - 2 * pad, H - inner_top - pad)
+
+
+def ui_resize_handles_try_begin(
+    r: pygame.Rect,
+    pos: Tuple[int, int],
+    *,
+    handle_px: int = UI_DEBUG_HANDLE_PX,
+    edge_px: int = UI_DEBUG_EDGE_PX,
+) -> Optional[Dict[str, Any]]:
+    """Hotspot-style hit test: corner scale, edge axis resize, interior move. Returns drag payload or None."""
+    if not r.collidepoint(pos):
+        # allow grabbing resize handles that might extend — still inside rect in our layout
+        return None
+    hsz = max(6, min(handle_px, r.w // 2, r.h // 2))
+    handle = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
+    if not handle.colliderect(r):
+        handle = pygame.Rect(r.right - min(hsz, r.w), r.bottom - min(hsz, r.h), min(hsz, r.w), min(hsz, r.h))
+    if handle.collidepoint(pos):
+        return {
+            "mode": "resize",
+            "w0": float(max(1, r.w)),
+            "h0": float(max(1, r.h)),
+            "tl": (float(r.x), float(r.y)),
+        }
+    et = max(2, min(edge_px, r.w // 3, r.h // 3))
+    c = hsz
+    inner_h = r.h - 2 * c
+    inner_w = r.w - 2 * c
+    if inner_h > 0:
+        er = pygame.Rect(r.right - et, r.top + c, et, inner_h)
+        if er.collidepoint(pos):
+            return {"mode": "resize_e", "l0": float(r.x), "t0": float(r.y), "h0": float(r.h)}
+        el = pygame.Rect(r.x, r.top + c, et, inner_h)
+        if el.collidepoint(pos):
+            return {"mode": "resize_w", "anchor_right": float(r.right), "t0": float(r.y), "h0": float(r.h)}
+    if inner_w > 0:
+        eb = pygame.Rect(r.left + c, r.bottom - et, inner_w, et)
+        if eb.collidepoint(pos):
+            return {"mode": "resize_s", "l0": float(r.x), "t0": float(r.y), "w0": float(r.w)}
+        et_top = pygame.Rect(r.left + c, r.y, inner_w, et)
+        if et_top.collidepoint(pos):
+            return {"mode": "resize_n", "l0": float(r.x), "w0": float(r.w), "anchor_bottom": float(r.bottom)}
+    return {
+        "mode": "move",
+        "grab": (float(pos[0] - r.x), float(pos[1] - r.y)),
+        "w": float(r.w),
+        "h": float(r.h),
+    }
+
+
+def ui_resize_handles_apply_motion(
+    pos: Tuple[int, int],
+    d: Dict[str, Any],
+    parent: pygame.Rect,
+    min_w: int,
+    min_h: int,
+    *,
+    max_scale_corner: float = 8.0,
+) -> pygame.Rect:
+    px, py = parent.x, parent.y
+    pr, pb = parent.right, parent.bottom
+
+    if d["mode"] == "move":
+        gx, gy = d["grab"]
+        new_r = pygame.Rect(int(pos[0] - gx), int(pos[1] - gy), int(d["w"]), int(d["h"]))
+    elif d["mode"] == "resize":
+        tlx, tly = d["tl"]
+        w0, h0 = d["w0"], d["h0"]
+        dx = float(pos[0]) - tlx
+        dy = float(pos[1]) - tly
+        if dx < 2.0 or dy < 2.0:
+            return pygame.Rect(int(tlx), int(tly), int(w0), int(h0))
+        s = min(dx / w0, dy / h0)
+        s = max(0.08, min(float(s), max_scale_corner))
+        new_r = pygame.Rect(int(tlx), int(tly), max(min_w, int(w0 * s)), max(min_h, int(h0 * s)))
+    elif d["mode"] == "resize_e":
+        new_w = max(min_w, int(pos[0] - d["l0"]))
+        new_r = pygame.Rect(int(d["l0"]), int(d["t0"]), new_w, int(d["h0"]))
+    elif d["mode"] == "resize_s":
+        new_h = max(min_h, int(pos[1] - d["t0"]))
+        new_r = pygame.Rect(int(d["l0"]), int(d["t0"]), int(d["w0"]), new_h)
+    elif d["mode"] == "resize_w":
+        ar = d["anchor_right"]
+        right_bound = max(px, int(ar) - min_w)
+        nl = clamp(int(pos[0]), px, right_bound)
+        new_w = max(min_w, int(ar - nl))
+        new_r = pygame.Rect(nl, int(d["t0"]), new_w, int(d["h0"]))
+    elif d["mode"] == "resize_n":
+        ab = d["anchor_bottom"]
+        bottom_bound = max(py, int(ab) - min_h)
+        nt = clamp(int(pos[1]), py, bottom_bound)
+        new_h = max(min_h, int(ab - nt))
+        new_r = pygame.Rect(int(d["l0"]), nt, int(d["w0"]), new_h)
+    else:
+        new_r = pygame.Rect(px, py, min_w, min_h)
+
+    new_r.w = max(min_w, min(new_r.w, parent.w))
+    new_r.h = max(min_h, min(new_r.h, parent.h))
+    new_r.x = clamp(int(new_r.x), px, pr - new_r.w)
+    new_r.y = clamp(int(new_r.y), py, pb - new_r.h)
+    return new_r
+
+
+UI_EDIT_REGION_ORDER: List[Tuple[str, str, Tuple[int, int, int]]] = [
+    ("cmd", "cmd_rect", (255, 200, 120)),
+    ("inv", "inv_rect", (200, 255, 180)),
+    ("map", "map_rect", (255, 120, 200)),
+    ("held", "held_rect", (120, 200, 255)),
+    ("right_panel", "right_panel", (200, 150, 100)),
+    ("log", "log_rect", (150, 200, 255)),
+    ("status", "status_rect", (180, 180, 255)),
+    ("text_panel", "text_panel", (200, 220, 100)),
+    ("viewport", "viewport_rect", (255, 100, 100)),
+]
+
+UI_EDIT_REGION_MINS: Dict[str, Tuple[int, int]] = {
+    "viewport": (120, 100),
+    "text_panel": (120, 80),
+    "status": (80, 22),
+    "log": (80, 40),
+    "right_panel": (160, 120),
+    "held": (48, 36),
+    "map": (80, 48),
+    "inv": (100, 72),
+    "cmd": (120, 72),
+}
 
 
 def enable_god_mode(state: Dict[str, Any], log: Any) -> None:
@@ -1852,48 +2422,8 @@ def compute_layout(
     log_top = status_rect.bottom + 10
     log_rect = pygame.Rect(text_panel.x + 10, log_top, text_panel.w - 20, text_panel.bottom - log_top - 10)
 
-    held_h = 52
     gap2 = 8
-    rh = right_panel.h - 10
-    manual_row = 36
-    # Top row: held (left) + minimap (right). Inventory uses former inv+map vertical space.
-    map_w = max(104, min(168, int(right_panel.w * 0.42)))
-    row_h = max(held_h + 4, 96)
-    budget = rh - row_h - manual_row - gap2 * 3
-    inv_h_single = max(72, min(140, int(max(80, budget) * 0.34)))
-    map_h_legacy = max(72, min(140, int(max(80, budget) * 0.34)))
-    inv_h = inv_h_single + gap2 + map_h_legacy
-    cmd_h = budget - inv_h
-    if cmd_h < 80:
-        shave = 80 - cmd_h
-        inv_h = max(120, inv_h - shave)
-        cmd_h = budget - inv_h
-
-    y0 = right_panel.y + 5
-    held_w = right_panel.w - map_w - gap2
-    held_y = y0 + (row_h - held_h) // 2
-    held_rect = pygame.Rect(right_panel.x, held_y, held_w, held_h)
-    map_rect = pygame.Rect(held_rect.right + gap2, y0, map_w, row_h)
-    inv_rect = pygame.Rect(right_panel.x, y0 + row_h + gap2, right_panel.w, inv_h)
-    cmd_rect = pygame.Rect(right_panel.x, inv_rect.bottom + gap2, right_panel.w, max(80, cmd_h))
-    extra_y = cmd_rect.bottom + gap2
-    row_btn_h = manual_row - 4
-    w3 = (cmd_rect.w - gap2 * 2) // 3
-    manual_btn_rect = pygame.Rect(cmd_rect.x, extra_y, w3, row_btn_h)
-    music_btn_rect = pygame.Rect(cmd_rect.x + w3 + gap2, extra_y, w3, row_btn_h)
-    restart_btn_rect = pygame.Rect(cmd_rect.x + 2 * (w3 + gap2), extra_y, w3, row_btn_h)
-
-    cols = 4
-    rows = 2
-    btn_h = max(26, min(36, (cmd_rect.h - gap2) // rows - gap2))
-    btn_w = (cmd_rect.w - gap2 * (cols - 1)) // cols
-    cmd_button_rects: List[Tuple[str, str, pygame.Rect]] = []
-    for i, c in enumerate(GAME["commands"]):
-        r = i // cols
-        cc = i % cols
-        bx = cmd_rect.x + cc * (btn_w + gap2)
-        by = cmd_rect.y + r * (btn_h + gap2)
-        cmd_button_rects.append((c["id"], c["label"], pygame.Rect(bx, by, btn_w, btn_h)))
+    ri = layout_right_internals(right_panel, GAME["commands"])
 
     return {
         "W": W,
@@ -1901,18 +2431,23 @@ def compute_layout(
         "pad": pad,
         "title_bar_h": title_bar_h,
         "viewport_rect": viewport_rect,
+        "bottom_rect": bottom_rect,
+        "gap_main": gap,
         "text_panel": text_panel,
         "right_panel": right_panel,
         "status_rect": status_rect,
         "log_rect": log_rect,
-        "held_rect": held_rect,
-        "inv_rect": inv_rect,
-        "map_rect": map_rect,
-        "cmd_rect": cmd_rect,
-        "manual_btn_rect": manual_btn_rect,
-        "music_btn_rect": music_btn_rect,
-        "restart_btn_rect": restart_btn_rect,
-        "cmd_button_rects": cmd_button_rects,
+        "held_rect": ri["held_rect"],
+        "inv_rect": ri["inv_rect"],
+        "map_rect": ri["map_rect"],
+        "cmd_rect": ri["cmd_rect"],
+        "manual_btn_rect": ri["manual_btn_rect"],
+        "music_btn_rect": ri["music_btn_rect"],
+        "restart_btn_rect": ri["restart_btn_rect"],
+        "cmd_button_rects": ri["cmd_button_rects"],
+        "top_row_y0": ri["top_row_y0"],
+        "top_row_h": ri["top_row_h"],
+        "layout_gap2": gap2,
     }
 
 
@@ -2040,6 +2575,7 @@ def main() -> int:
 
     def restart() -> None:
         nonlocal title_screen, intro_done, inv_scroll_px
+        nonlocal music_vol_dragging, music_vol_hover_ms, music_vol_popup_visible
         state.clear()
         state.update(default_state())
         log.lines.clear()
@@ -2047,12 +2583,16 @@ def main() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
-        nonlocal active_room_popup, active_manual_popup, active_linda_popup, hs_debug_drag
+        nonlocal active_room_popup, active_manual_popup, active_linda_popup, hs_debug_drag, ui_layout_debug_drag
         active_room_popup = None
         active_manual_popup = None
         active_linda_popup = None
         hs_debug_drag = None
+        ui_layout_debug_drag = None
         inv_scroll_px = 0
+        music_vol_dragging = False
+        music_vol_hover_ms = 0
+        music_vol_popup_visible = False
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
@@ -2074,7 +2614,30 @@ def main() -> int:
     layout_state: Dict[str, Any] = {}
     item_thumb_cache: Dict[str, pygame.Surface] = {}
     debug_hotspots = False
+    ui_layout_ov: Dict[str, Any] = load_ui_layout_overrides()
+    debug_ui_layout = False
+    ui_layout_debug_drag: Optional[Dict[str, Any]] = None
     gameplay_music_on = True
+    _audio_loaded = load_audio_settings()
+    music_volume = float(_audio_loaded["music_volume"])
+    music_vol_dragging = False
+    music_vol_hover_ms = 0
+    music_vol_popup_visible = False
+
+    def set_music_volume(vol: float) -> None:
+        nonlocal music_volume
+        music_volume = max(0.0, min(1.0, float(vol)))
+        try:
+            pygame.mixer.music.set_volume(music_volume)
+        except Exception:
+            pass
+        save_audio_settings({"music_volume": music_volume})
+
+    try:
+        pygame.mixer.music.set_volume(music_volume)
+    except Exception:
+        pass
+
     ui_face_frames: List[pygame.Surface] = load_ui_player_face_frames()
     plasma_orb_frames: Dict[int, Optional[pygame.Surface]] = load_plasma_orb_frames()
     plasma_orb_decor: Optional[pygame.Surface] = load_plasma_orb_decor()
@@ -2092,6 +2655,7 @@ def main() -> int:
             if pygame.mixer.get_init() is None:
                 pygame.mixer.init()
             pygame.mixer.music.load(title_music_path)
+            pygame.mixer.music.set_volume(music_volume)
             pygame.mixer.music.play(loops=-1)
         except Exception:
             pass
@@ -2109,6 +2673,7 @@ def main() -> int:
             if pygame.mixer.get_init() is None:
                 pygame.mixer.init()
             pygame.mixer.music.load(gameplay_music_path)
+            pygame.mixer.music.set_volume(music_volume)
             pygame.mixer.music.play(loops=-1)
         except Exception:
             pass
@@ -2188,9 +2753,13 @@ def main() -> int:
         held_rect = layout_state["held_rect"]
         draw_box(screen, held_rect, "Held")
         cmd = current_cmd().upper()
-        screen.blit(font_small.render(f"Command: {cmd}", True, colors["muted"]), (held_rect.x + 10, held_rect.y + 30))
-        iw = max(held_rect.x + 160, held_rect.x + held_rect.w // 2)
-        screen.blit(font_small.render(f"Item: {held_item_name()}", True, colors["accent_dim"]), (iw, held_rect.y + 30))
+        y_line = held_rect.y + 30
+        cmd_surf = font_small.render(f"Command: {cmd}", True, colors["muted"])
+        item_surf = font_small.render(f"Item: {held_item_name()}", True, colors["accent_dim"])
+        screen.blit(cmd_surf, (held_rect.x + 10, y_line))
+        item_x = held_rect.right - item_surf.get_width() - 10
+        item_x = max(item_x, held_rect.x + 10 + cmd_surf.get_width() + 14)
+        screen.blit(item_surf, (item_x, y_line))
 
     inv_buttons: List[Tuple[str, pygame.Rect]] = []
 
@@ -2248,32 +2817,74 @@ def main() -> int:
         map_rect = layout_state["map_rect"]
         draw_box(screen, map_rect, "Minimap")
         size = 5
-        grid_area = pygame.Rect(map_rect.x + 10, map_rect.y + 30, map_rect.w - 20, map_rect.h - 40)
-        cell = min((grid_area.w - 4 * (size - 1)) // size, (grid_area.h - 4 * (size - 1)) // size)
-        # build room positions
+        grid_area = pygame.Rect(map_rect.x + 10, map_rect.y + 28, map_rect.w - 20, map_rect.h - 32)
+        gap = 4
+        cell = min((grid_area.w - gap * (size - 1)) // size, (grid_area.h - gap * (size - 1)) // size)
         pos_to_room: Dict[Tuple[int, int], str] = {}
+        centers: Dict[str, Tuple[int, int]] = {}
+        rects: Dict[str, pygame.Rect] = {}
         for rid, r in GAME["rooms"].items():
             mp = r.get("mapPos")
             if mp and len(mp) == 2:
                 pos_to_room[(mp[0], mp[1])] = rid
+        here_id = state["roomId"]
+        player_f = room_map_floor(room_def(here_id))
+
         for y in range(size):
             for x in range(size):
-                rr = pygame.Rect(grid_area.x + x * (cell + 4), grid_area.y + y * (cell + 4), cell, cell)
+                rr = pygame.Rect(grid_area.x + x * (cell + gap), grid_area.y + y * (cell + gap), cell, cell)
                 rid = pos_to_room.get((x, y))
+                if rid:
+                    centers[rid] = (rr.centerx, rr.centery)
+                    rects[rid] = rr
                 seen = rid and state["seenRooms"].get(rid, False)
-                here = rid == state["roomId"]
+                here = rid == here_id
+                fl = room_map_floor(room_def(rid)) if rid else 0
                 bg = (10, 14, 12)
+                if seen and rid:
+                    if fl == player_f:
+                        bg = (210, 218, 214)
+                    elif fl > player_f:
+                        bg = (52, 28, 34)
+                    else:
+                        bg = (22, 30, 52)
                 br = colors["border"]
                 if seen:
-                    bg = (16, 28, 22)
-                    br = (35, 90, 62)
+                    br = (35, 90, 62) if (not rid or fl == player_f) else (70, 90, 110)
                 pygame.draw.rect(screen, bg, rr, border_radius=6)
                 pygame.draw.rect(screen, br, rr, 1, border_radius=6)
                 if here:
                     pygame.draw.rect(screen, colors["warn"], rr, 2, border_radius=6)
-                # marker
-                marker = "■" if seen else "·"
-                screen.blit(font_small.render(marker, True, colors["text"] if seen else colors["muted"]), (rr.centerx - 4, rr.centery - 8))
+                marker = "■" if seen and rid else "·"
+                mk_col = colors["text"] if seen and rid else colors["muted"]
+                if seen and rid and fl != player_f:
+                    mk_col = (240, 230, 220) if fl > player_f else (200, 210, 235)
+                screen.blit(font_small.render(marker, True, mk_col), (rr.centerx - 4, rr.centery - 8))
+
+        pair_done: set[Tuple[str, str]] = set()
+        for rid, room in GAME["rooms"].items():
+            mp = room.get("mapPos")
+            if not mp or len(mp) != 2:
+                continue
+            for dire, tid in room.get("exits", {}).items():
+                key = tuple(sorted((rid, tid)))
+                if key in pair_done:
+                    continue
+                pair_done.add(key)
+                p0 = centers.get(rid)
+                p1 = centers.get(tid)
+                if not p0 or not p1:
+                    continue
+                f0 = room_map_floor(room_def(rid))
+                f1 = room_map_floor(room_def(tid))
+                is_vert_travel = dire in ("down", "up") or f0 != f1
+                if is_vert_travel:
+                    pygame.draw.line(screen, (100, 150, 210), p0, p1, 2)
+                    mx = (p0[0] + p1[0]) // 2
+                    my = (p0[1] + p1[1]) // 2
+                    screen.blit(font_small.render("Δ", True, (160, 200, 245)), (mx - 3, my - 8))
+                else:
+                    pygame.draw.line(screen, (38, 72, 58), p0, p1, 1)
 
     # Hotspots are computed each frame from room data
     def get_hotspot_rects() -> List[Tuple[Dict[str, Any], pygame.Rect, bool]]:
@@ -2435,6 +3046,69 @@ def main() -> int:
             f'{{"l": {rr["l"]:.2f}, "t": {rr["t"]:.2f}, "w": {rr["w"]:.2f}, "h": {rr["h"]:.2f}}}'
         )
         hs_debug_drag = None
+
+    def ui_layout_parent_rect(region: str, ls: Dict[str, Any]) -> pygame.Rect:
+        if region == "viewport":
+            return ui_window_content_rect(ls["W"], ls["H"], ls["pad"], ls["title_bar_h"])
+        if region in ("text_panel", "right_panel"):
+            return ls["bottom_rect"]
+        if region in ("status", "log"):
+            return ls["text_panel"]
+        return ls["right_panel"]
+
+    def ui_layout_debug_try_begin(pos: Tuple[int, int]) -> bool:
+        nonlocal ui_layout_debug_drag
+        if not debug_ui_layout:
+            return False
+        right_children = ("cmd_rect", "inv_rect", "map_rect", "held_rect")
+        for region_key, lay_key, _col in UI_EDIT_REGION_ORDER:
+            r = layout_state[lay_key]
+            if region_key == "right_panel":
+                if not r.collidepoint(pos):
+                    continue
+                if any(layout_state[k].collidepoint(pos) for k in right_children):
+                    continue
+            elif not r.collidepoint(pos):
+                continue
+            payload = ui_resize_handles_try_begin(r, pos)
+            if payload:
+                ui_layout_debug_drag = {"region": region_key, "lay_key": lay_key, **payload}
+                return True
+        return False
+
+    def ui_layout_debug_apply_motion(pos: Tuple[int, int]) -> None:
+        d = ui_layout_debug_drag
+        if d is None:
+            return
+        region = str(d["region"])
+        parent = ui_layout_parent_rect(region, layout_state)
+        min_w, min_h = UI_EDIT_REGION_MINS[region]
+        new_r = ui_resize_handles_apply_motion(pos, d, parent, min_w, min_h)
+        ui_layout_ov.setdefault("regions", {})
+        ui_layout_ov["regions"][region] = ui_rect_to_dict(new_r)
+
+    def ui_layout_debug_end_drag() -> None:
+        nonlocal ui_layout_debug_drag
+        if ui_layout_debug_drag is None:
+            return
+        d = ui_layout_debug_drag
+        rk = str(d.get("region", ""))
+        rr = ui_layout_ov.get("regions", {}).get(rk)
+        log_sys(f"UI layout {rk} ({d.get('mode')}): {rr}")
+        ui_layout_debug_drag = None
+
+    def draw_ui_layout_debug_overlay() -> None:
+        if not debug_ui_layout:
+            return
+        for _rk, lay_key, col in UI_EDIT_REGION_ORDER:
+            r = layout_state[lay_key]
+            dbg = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+            dbg.fill((*col, 26))
+            screen.blit(dbg, r.topleft)
+            pygame.draw.rect(screen, col, r, 1, border_radius=6)
+            hsz = max(6, min(UI_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
+            h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
+            pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
 
     def do_hotspot_click(hs: Dict[str, Any]) -> None:
         cmd = current_cmd()
@@ -2769,6 +3443,7 @@ def main() -> int:
         dt_ms = clock.tick(60)
         mx, my = pygame.mouse.get_pos()
         lay = compute_layout(*screen.get_size())
+        apply_ui_layout_overrides(lay, ui_layout_ov)
         layout_state.clear()
         layout_state.update(lay)
         pad = lay["pad"]
@@ -2785,6 +3460,31 @@ def main() -> int:
         music_lbl = "MUSIC ON" if gameplay_music_on else "MUSIC OFF"
         music_btn = Button(lay["music_btn_rect"], music_lbl, "music_toggle")
         restart_btn = Button(lay["restart_btn_rect"], "RESTART", "restart", danger=True)
+
+        if not title_screen:
+            on_save_load = any(
+                b.rect.collidepoint((mx, my)) for b in cmd_buttons if b.value in ("save", "load")
+            )
+            _vpr_hover = music_vol_popup_rect(music_btn.rect, lay)
+            if on_save_load:
+                music_vol_hover_ms = 0
+                if not music_vol_dragging:
+                    music_vol_popup_visible = False
+            elif music_btn.rect.collidepoint((mx, my)):
+                music_vol_hover_ms = min(music_vol_hover_ms + int(dt_ms), MUSIC_VOL_HOVER_DELAY_MS * 3)
+                if music_vol_hover_ms >= MUSIC_VOL_HOVER_DELAY_MS:
+                    music_vol_popup_visible = True
+            elif music_vol_popup_visible and _vpr_hover.collidepoint((mx, my)):
+                pass
+            elif music_vol_dragging:
+                music_vol_popup_visible = True
+            else:
+                music_vol_hover_ms = 0
+                if not music_vol_dragging:
+                    music_vol_popup_visible = False
+        else:
+            music_vol_hover_ms = 0
+            music_vol_popup_visible = False
 
         # Activate pending room popup (first-visit flavor text)
         if (
@@ -2964,6 +3664,15 @@ def main() -> int:
                     log.wheel(event.y)
             elif event.type == pygame.MOUSEMOTION:
                 if (
+                    music_vol_dragging
+                    and pygame.mouse.get_pressed()[0]
+                    and not title_screen
+                    and music_vol_popup_visible
+                ):
+                    vpr = music_vol_popup_rect(music_btn.rect, lay)
+                    tin = music_vol_track_inner(vpr)
+                    set_music_volume(music_volume_from_track_x(tin, event.pos[0]))
+                elif (
                     debug_hotspots
                     and hs_debug_drag is not None
                     and pygame.mouse.get_pressed()[0]
@@ -2974,8 +3683,28 @@ def main() -> int:
                     and not item_popup_queue
                 ):
                     hs_debug_apply_motion(event.pos)
+                elif (
+                    debug_ui_layout
+                    and ui_layout_debug_drag is not None
+                    and pygame.mouse.get_pressed()[0]
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                    and active_manual_popup is None
+                    and not item_popup_queue
+                ):
+                    ui_layout_debug_apply_motion(event.pos)
             elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-                if (
+                if music_vol_dragging:
+                    music_vol_dragging = False
+                elif (
+                    ui_layout_debug_drag is not None
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                ):
+                    ui_layout_debug_end_drag()
+                elif (
                     hs_debug_drag is not None
                     and not title_screen
                     and active_room_popup is None
@@ -2983,6 +3712,16 @@ def main() -> int:
                 ):
                     hs_debug_end_drag()
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                if (
+                    debug_ui_layout
+                    and not title_screen
+                    and active_room_popup is None
+                    and active_linda_popup is None
+                    and active_manual_popup is None
+                    and not item_popup_queue
+                    and ui_layout_debug_try_begin(event.pos)
+                ):
+                    continue
                 for b in cmd_buttons:
                     if b.rect.collidepoint(event.pos):
                         if b.value == "save":
@@ -3000,6 +3739,14 @@ def main() -> int:
                         open_manual()
                         apply_action(state, "system", log)
                         continue
+                    if not title_screen and music_vol_popup_visible:
+                        vpr = music_vol_popup_rect(music_btn.rect, lay)
+                        if vpr.collidepoint(event.pos):
+                            music_vol_dragging = True
+                            tin = music_vol_track_inner(vpr)
+                            set_music_volume(music_volume_from_track_x(tin, event.pos[0]))
+                            apply_action(state, "system", log)
+                            continue
                     if music_btn.rect.collidepoint(event.pos):
                         gameplay_music_on = not gameplay_music_on
                         if gameplay_music_on:
@@ -3098,6 +3845,40 @@ def main() -> int:
                         log_sys(f"Hotspot layout saved to {os.path.basename(msg)} (loaded on next game start).")
                     else:
                         log_sys(f"Hotspot layout save failed: {msg}")
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F5:
+                if (
+                    not title_screen
+                    and not item_popup_queue
+                    and active_room_popup is None
+                    and active_manual_popup is None
+                    and active_linda_popup is None
+                ):
+                    if not UI_LAYOUT_DEBUG_F5_FOR_EVERYONE and not state.get("uiLayoutDebugUnlocked"):
+                        log.add("UI layout mode is locked.", "dim")
+                    else:
+                        debug_ui_layout = not debug_ui_layout
+                        if debug_ui_layout:
+                            log_sys(
+                                "UI layout: all tinted panels — move body, edges = axis resize, corner = uniform scale "
+                                "(same as F3). Right column empty stripe = right_panel. F6 saves ui_layout.json."
+                            )
+                        else:
+                            ui_layout_debug_drag = None
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F6:
+                if (
+                    debug_ui_layout
+                    and not title_screen
+                    and not item_popup_queue
+                    and active_room_popup is None
+                    and active_manual_popup is None
+                    and active_linda_popup is None
+                ):
+                    sync_ui_layout_overrides_from_lay(layout_state, ui_layout_ov)
+                    ok, msg = save_ui_layout_overrides(ui_layout_ov)
+                    if ok:
+                        log_sys(f"UI layout saved to {os.path.basename(msg)} (loaded on next game start).")
+                    else:
+                        log_sys(f"UI layout save failed: {msg}")
 
         if title_screen:
             draw_title_scr()
@@ -3113,7 +3894,7 @@ def main() -> int:
         title = font_ui.render(GAME["meta"]["title"], True, colors["text"])
         screen.blit(title, (pad, pad))
         subtitle = font_small.render(
-            "Shadowgate • Mouse-only • F3: hotspot editor (move / corner=uniform / edges=axis) • F4: save layout",
+            "Shadowgate • Mouse-only • F3/F4: hotspot layout • F5/F6: UI layout (minimap + Held)",
             True,
             colors["muted"],
         )
@@ -3230,6 +4011,7 @@ def main() -> int:
         draw_held()
         draw_inventory()
         draw_minimap()
+        draw_ui_layout_debug_overlay()
 
         for b in cmd_buttons:
             b.draw(screen, font_small, colors)
@@ -3238,12 +4020,23 @@ def main() -> int:
         music_btn.draw(screen, font_small, colors)
         restart_btn.draw(screen, font_small, colors)
 
+        music_vpr = music_vol_popup_rect(music_btn.rect, lay)
+        if not title_screen and music_vol_popup_visible:
+            draw_music_volume_popup(screen, music_vpr, music_volume, colors, font_small)
+
         hint_y = status_rect.bottom + 2
         if manual_btn.rect.collidepoint((mx, my)):
             screen.blit(font_small.render("Click: Manual", True, colors["muted"]), (status_rect.x + 10, hint_y))
-        elif music_btn.rect.collidepoint((mx, my)):
+        elif not title_screen and music_btn.rect.collidepoint((mx, my)):
+            if music_vol_popup_visible:
+                hint_m = "Music: click to toggle · drag slider to set volume"
+            else:
+                remain = max(0, (MUSIC_VOL_HOVER_DELAY_MS - music_vol_hover_ms + 999) // 1000)
+                hint_m = f"Music: hover {remain}s more for volume · click toggles playback"
+            screen.blit(font_small.render(hint_m, True, colors["muted"]), (status_rect.x + 10, hint_y))
+        elif not title_screen and music_vol_popup_visible and music_vpr.collidepoint((mx, my)):
             screen.blit(
-                font_small.render("Click: toggle in-game music (loops)", True, colors["muted"]),
+                font_small.render("Drag the slider to set music volume", True, colors["muted"]),
                 (status_rect.x + 10, hint_y),
             )
         elif restart_btn.rect.collidepoint((mx, my)):
