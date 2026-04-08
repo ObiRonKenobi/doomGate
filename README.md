@@ -41,3 +41,6 @@ A **title screen** appears first: press **any key** or **click** (“Press Any K
 
 - SAVE/LOAD buttons persist state to `savegame.json` in the game folder.
 
+
+Rip and Tear!
+~ rbyt3r
