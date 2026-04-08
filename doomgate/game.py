@@ -22,6 +22,7 @@ def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
         "seenRooms": {},
         "roomIntroShown": {},
         "pendingRoomPopup": None,
+        "pendingVictoryPopup": False,
         "pendingLindaTerminal": False,
         "lindaWrongCount": 0,
         "actions": game["meta"]["startActions"],
@@ -41,6 +42,7 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     base.setdefault("seenRooms", {})
     base.setdefault("roomIntroShown", {})
     base.setdefault("pendingRoomPopup", None)
+    base.setdefault("pendingVictoryPopup", False)
     base.setdefault("pendingLindaTerminal", False)
     base.setdefault("lindaWrongCount", 0)
     base.setdefault("godMode", False)
@@ -106,11 +108,9 @@ def enable_god_mode(game: Dict[str, Any], state: Dict[str, Any], log: LogLike) -
 def announce_victory_if_won(state: Dict[str, Any], log: LogLike) -> None:
     if not get_flag(state, "gameWon"):
         return
-    log.add("VICTORY", "title")
-    log.add(
-        "The rift seals. The facility groans like a dying god of metal. You run. Or you don't. Either way, history gets a footnote.",
-        "sys",
-    )
+    if state.get("pendingVictoryPopup"):
+        return
+    state["pendingVictoryPopup"] = True
 
 
 def action_cost(kind: str) -> int:

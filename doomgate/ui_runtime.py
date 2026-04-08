@@ -1868,6 +1868,7 @@ def run() -> int:
     def restart() -> None:
         nonlocal title_screen, intro_done, inv_scroll_px
         nonlocal music_vol_dragging, music_vol_hover_ms, music_vol_popup_visible
+        nonlocal victory_fade_alpha, victory_fade_active
         state.clear()
         state.update(default_state())
         log.lines.clear()
@@ -1885,6 +1886,8 @@ def run() -> int:
         music_vol_dragging = False
         music_vol_hover_ms = 0
         music_vol_popup_visible = False
+        victory_fade_alpha = 0.0
+        victory_fade_active = False
         intro()
         intro_done = True
         state["seenRooms"][state["roomId"]] = True
@@ -1915,6 +1918,15 @@ def run() -> int:
     music_vol_dragging = False
     music_vol_hover_ms = 0
     music_vol_popup_visible = False
+    victory_fade_alpha = 0.0
+    victory_fade_active = False
+
+    def dismiss_active_room_popup() -> None:
+        nonlocal active_room_popup, victory_fade_alpha, victory_fade_active
+        if active_room_popup is not None and active_room_popup.get("kind") == "victory":
+            victory_fade_active = True
+            victory_fade_alpha = 0.0
+        active_room_popup = None
 
     def set_music_volume(vol: float) -> None:
         nonlocal music_volume
@@ -2527,32 +2539,72 @@ def run() -> int:
         overlay.fill((0, 0, 0, 130))
         screen.blit(overlay, (0, 0))
 
-        room_id = popup["roomId"]
+        is_victory = popup.get("kind") == "victory"
         full_text: str = popup["text"]
         shown: str = full_text[: int(popup.get("idx", 0))]
 
-        panel_w = min(680, W - 60)
-        panel_h = min(380, H - 60)
+        panel_w = min(720, W - 48)
+        panel_h = min(520, H - 48) if is_victory else min(380, H - 60)
         panel = pygame.Rect((W - panel_w) // 2, (H - panel_h) // 2, panel_w, panel_h)
 
         # Terminal look: black glass + green border
         pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
         pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
 
-        title = room_def(room_id).get("name", room_id).upper()
-        title_s = font_mono.render(title, True, colors["accent"])
+        if is_victory:
+            title_s = font_mono.render("UAC — CRUCIBLE FACILITY // PRIORITY BROADCAST", True, colors["accent"])
+        else:
+            room_id = popup["roomId"]
+            title = room_def(room_id).get("name", room_id).upper()
+            title_s = font_mono.render(title, True, colors["accent"])
         screen.blit(title_s, (panel.x + 18, panel.y + 14))
 
         inner = pygame.Rect(panel.x + 16, panel.y + 44, panel.w - 32, panel.h - 84)
         pygame.draw.rect(screen, (0, 0, 0), inner)
-
         body_font = font_mono
-        lines = wrap_text_lines(body_font, shown, inner.w - 4)
-        y = inner.y + 6
-        max_lines = max(1, int((inner.h - 10) / body_font.get_linesize()))
-        for line in lines[-max_lines:]:
-            screen.blit(body_font.render(line, True, colors["accent"]), (inner.x + 2, y))
-            y += body_font.get_linesize()
+
+        if is_victory:
+            raw_header = str(popup.get("asciiHeader", "") or "")
+            hdr_lines = [ln.rstrip("\n") for ln in raw_header.splitlines() if ln.strip()]
+            hdr_color = (120, 255, 170)
+            lh = body_font.get_linesize()
+            header_h = len(hdr_lines) * lh + 10 if hdr_lines else 0
+            y_hdr = inner.y + 8
+            max_hdr_w = inner.w - 8
+            for hl in hdr_lines:
+                line_s = body_font.render(hl, True, hdr_color)
+                if line_s.get_width() > max_hdr_w:
+                    scale = max(0.65, min(1.0, max_hdr_w / float(max(1, line_s.get_width()))))
+                    nw = max(1, int(line_s.get_width() * scale))
+                    nh = max(1, int(line_s.get_height() * scale))
+                    line_s = pygame.transform.smoothscale(line_s, (nw, nh))
+                hx = inner.x + (inner.w - line_s.get_width()) // 2
+                screen.blit(line_s, (hx, y_hdr))
+                y_hdr += max(lh, line_s.get_height()) + 1
+            divider_y = inner.y + 8 + header_h + 4
+            if hdr_lines:
+                pygame.draw.line(
+                    screen,
+                    (40, 90, 65),
+                    (inner.x + 8, divider_y),
+                    (inner.right - 8, divider_y),
+                    1,
+                )
+            body_top = divider_y + 8 if hdr_lines else inner.y + 8
+            body_inner_h = max(40, inner.bottom - body_top - 10)
+            lines = wrap_text_lines(body_font, shown, inner.w - 8)
+            y = body_top
+            max_lines = max(1, int(body_inner_h / lh))
+            for line in lines[-max_lines:]:
+                screen.blit(body_font.render(line, True, colors["accent"]), (inner.x + 4, y))
+                y += lh
+        else:
+            lines = wrap_text_lines(body_font, shown, inner.w - 4)
+            y = inner.y + 6
+            max_lines = max(1, int((inner.h - 10) / body_font.get_linesize()))
+            for line in lines[-max_lines:]:
+                screen.blit(body_font.render(line, True, colors["accent"]), (inner.x + 2, y))
+                y += body_font.get_linesize()
 
         done = bool(popup.get("done", False))
         prompt_txt = "CLICK TO CLOSE" if done else "CLICK TO SKIP"
@@ -2778,6 +2830,26 @@ def run() -> int:
             music_vol_hover_ms = 0
             music_vol_popup_visible = False
 
+        # Victory outro (terminal popup + later fade)
+        if (
+            active_room_popup is None
+            and active_manual_popup is None
+            and not title_screen
+            and not item_popup_queue
+            and state.get("pendingVictoryPopup")
+            and isinstance(GAME.get("victoryOutro"), dict)
+        ):
+            vo = GAME["victoryOutro"]
+            active_room_popup = {
+                "kind": "victory",
+                "asciiHeader": str(vo.get("asciiHeader", "")),
+                "text": str(vo.get("body", "")),
+                "idx": 0,
+                "done": False,
+                "acc_ms": 0,
+            }
+            state["pendingVictoryPopup"] = False
+
         # Activate pending room popup (first-visit flavor text)
         if (
             active_room_popup is None
@@ -2815,7 +2887,7 @@ def run() -> int:
         # Typewriter effect update
         if active_room_popup is not None and not active_room_popup.get("done", False):
             active_room_popup["acc_ms"] = int(active_room_popup.get("acc_ms", 0)) + int(dt_ms)
-            cps = 45  # characters per second
+            cps = 36 if active_room_popup.get("kind") == "victory" else 45  # characters per second
             step_ms = max(1, int(1000 / cps))
             while active_room_popup["acc_ms"] >= step_ms and not active_room_popup.get("done", False):
                 active_room_popup["acc_ms"] -= step_ms
@@ -2841,6 +2913,9 @@ def run() -> int:
                     except Exception:
                         pass
 
+        if victory_fade_active and not title_screen:
+            victory_fade_alpha = min(255.0, victory_fade_alpha + float(dt_ms) * 0.092)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
@@ -2859,13 +2934,26 @@ def run() -> int:
                     except Exception:
                         pass
                 elif active_room_popup is not None:
-                    active_room_popup = None
+                    dismiss_active_room_popup()
                 elif active_manual_popup is not None:
                     active_manual_popup = None
                 elif item_popup_queue:
                     item_popup_queue.pop(0)
                 else:
                     running = False
+            elif (
+                not title_screen
+                and victory_fade_active
+                and victory_fade_alpha > 45
+                and active_room_popup is None
+                and active_linda_popup is None
+                and active_manual_popup is None
+                and not item_popup_queue
+            ):
+                if event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                    if restart_btn.rect.collidepoint(event.pos):
+                        restart()
+                continue
             elif active_linda_popup is not None:
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_q and not str(active_linda_popup.get("input", "")).strip():
@@ -2905,13 +2993,13 @@ def run() -> int:
                         active_room_popup["idx"] = len(active_room_popup["text"])
                         active_room_popup["done"] = True
                     else:
-                        active_room_popup = None
+                        dismiss_active_room_popup()
                 elif event.type == pygame.KEYDOWN:
                     if not active_room_popup.get("done", False):
                         active_room_popup["idx"] = len(active_room_popup["text"])
                         active_room_popup["done"] = True
                     else:
-                        active_room_popup = None
+                        dismiss_active_room_popup()
                 else:
                     # Ignore any other events (wheel, resize handled above, etc.)
                     pass
@@ -3342,6 +3430,16 @@ def run() -> int:
             draw_linda_popup(active_linda_popup)
         if active_manual_popup is not None:
             draw_manual_popup(active_manual_popup)
+
+        if victory_fade_active and not title_screen and victory_fade_alpha > 0:
+            vw, vh = screen.get_size()
+            veil = pygame.Surface((vw, vh), pygame.SRCALPHA)
+            a = int(min(255, round(victory_fade_alpha)))
+            veil.fill((0, 0, 0, a))
+            screen.blit(veil, (0, 0))
+            if a >= 185:
+                h1 = font_small.render("RESTART — lower right · ESC quits", True, (218, 226, 220))
+                screen.blit(h1, h1.get_rect(midbottom=(vw // 2, vh - 28)))
 
         pygame.display.flip()
 

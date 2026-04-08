@@ -168,6 +168,32 @@ def make_game_core() -> Dict[str, Any]:
                 "- Assemble the Soul-Core Breaker and USE it on Director Crux in the Hell-Gate Chamber.",
             ]
         ),
+        "victoryOutro": {
+            "asciiHeader": (
+                " ██╗   ██╗██╗ ██████╗████████╗ ██████╗ ██████╗ ██╗ ██╗   ██╗███████╗\n"
+                " ██║   ██║██║██╔════╝╚══██╔══╝██╔═══██╗██╔══██╗██║ ██║   ██║██╔════╝\n"
+                " ██║   ██║██║██║        ██║   ██║   ██║██████╔╝██║ ██║   ██║███████╗\n"
+                " ╚██╗ ██╔╝██║██║        ██║   ██║   ██║██╔══██╗██║ ██║   ██║╚════██║\n"
+                "  ╚████╔╝ ██║╚██████╗   ██║   ╚██████╔╝██║  ██║██║ ╚██████╔╝███████║\n"
+                "   ╚═══╝  ╚═╝ ╚═════╝   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═════╝ ╚══════╝"
+            ),
+            "body": (
+                "Congratulations, Marine. You held the line when the line was a bleeding fault in reality.\n\n"
+                "Mars keeps spinning. The hell-gate is shut; the rift stops begging for a wider doorway. "
+                "What you did will never read clean on a UAC incident report—and that is exactly how you know "
+                "it counted.\n\n"
+                "But endings bill themselves in bruises, not brass bands. The seal tears loose as violence—compressed thunder, "
+                "then shrapnel, stone, white-hot splinters hunting for meat. Your armor becomes a rumor. "
+                "Your body becomes a casualty of physics doing what physics does when hell slams a door.\n\n"
+                "You sink into rubble and noise: alarms shredding themselves, bulkheads shearing, dust like snow made "
+                "of broken teeth. Vision tunnels. The world turns to bedlam—then smaller, and smaller still.\n\n"
+                "Somewhere in the pandemonium, the intercom claws its way through static. Not L.I.N.D.A. Not calm. "
+                "Not corporate. Just three words, barked like a warning shot:\n\n"
+                "    \"SLAYER IN COMING!\"\n\n"
+                "Sound folds inward. The light follows.\n\n"
+                "Black."
+            ),
+        },
         "rooms": build_rooms(),
     }
 
