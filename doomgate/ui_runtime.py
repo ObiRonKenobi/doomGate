@@ -15,6 +15,12 @@ import pygame
 # -----------------------------
 from doomgate.data.game_core import make_game_core
 from doomgate.game import merge_loaded_save
+from doomgate.ui.marine_portrait import (
+    MarinePortraitAtlas,
+    legacy_player_face_frame_index,
+    load_marine_portrait_atlas,
+    pick_marine_portrait_surface,
+)
 
 GAME: Dict[str, Any] = make_game_core()
 
@@ -222,7 +228,7 @@ _ROOMS_LEGACY = {
                     "onceFlag": "openedCrate",
                     "gain": ["stimpack"],
                     "addLanterns": 1,
-                    "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a Stimpack. The cell clamps to your harness; UAC still believes in benefits packages.",
+                    "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a vial of demon blood. The glass is warm, like it hates you personally.",
                 },
                 "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
             },
@@ -322,7 +328,7 @@ _ROOMS_LEGACY = {
         "objects": {
             "seal": {
                 "look": "A blood-painted seal mixed with circuitry diagrams. Crux always did love cross-discipline collaboration.",
-                "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You crack the Stimpack's seal and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
+                "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You uncap the vial and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
                 "take": {"death": "sealFlays", "text": "You try to scrape the seal into your pocket. The seal tries to scrape you into the floor."},
             },
         },
@@ -710,27 +716,6 @@ def plasma_charge_fraction(state: Dict[str, Any]) -> float:
     return float(ap - seg) / float(ap)
 
 
-def player_face_frame_index(state: Dict[str, Any]) -> int:
-    """Pick sprite index for status portrait (0=good … higher=worse)."""
-    if get_flag(state, "gameWon"):
-        return 0
-    if state.get("godMode"):
-        return 0
-    if not state["alive"]:
-        return 5
-    ap = GAME["meta"]["actionsPerLantern"]
-    ud = max(0, ap - (state["actions"] % ap))
-    if state["lanterns"] <= 1 and state["alive"]:
-        if state["lanterns"] == 0:
-            return 5
-        if ud <= ap // 3:
-            return 4
-        return 3
-    if state["lanterns"] == 2 and ud <= ap // 4:
-        return 2
-    return 1 if state["lanterns"] <= 2 else 0
-
-
 def _fill_circle_from_bottom(
     target: pygame.Surface, cx: int, cy: int, r: int, fill01: float, rgb: Tuple[int, int, int]
 ) -> None:
@@ -794,24 +779,31 @@ def draw_player_status_meter(
     cx: int,
     cy: int,
     r: int,
-    frame_idx: int,
-    frames: List[pygame.Surface],
+    marine_surf: Optional[pygame.Surface],
+    legacy_frames: List[pygame.Surface],
+    legacy_frame_idx: int,
     colors: Dict[str, Any],
 ) -> None:
     pygame.draw.circle(screen, (14, 18, 16), (cx, cy), r + 2)
     pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
-    if frames:
-        img = frames[frame_idx % len(frames)]
+    img: Optional[pygame.Surface] = None
+    if marine_surf is not None:
+        img = marine_surf
+    elif legacy_frames:
+        img = legacy_frames[legacy_frame_idx % len(legacy_frames)]
+    if img is not None:
         side = min(r * 2, max(32, int(r * 1.85)))
-        scaled = pygame.transform.smoothscale(img, (side, side))
+        # Nearest-neighbor keeps chunky Doom-style pixel art sharp in the circular HUD.
+        scaled = pygame.transform.scale(img, (side, side))
         screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
     else:
         # Placeholder Doom-style mug until PNGs exist
+        fi = legacy_frame_idx
         pygame.draw.circle(screen, (90, 72, 58), (cx, cy), r - 2)
         eye = (255, 220, 200)
         pygame.draw.circle(screen, eye, (cx - r // 3, cy - r // 8), max(3, r // 10))
         pygame.draw.circle(screen, eye, (cx + r // 3, cy - r // 8), max(3, r // 10))
-        mouth_h = clamp(r // 4 + frame_idx * 2, 2, r // 2)
+        mouth_h = clamp(r // 4 + fi * 2, 2, r // 2)
         pygame.draw.arc(screen, (40, 28, 24), pygame.Rect(cx - r // 2, cy, r, mouth_h), math.pi * 0.1, math.pi * 0.9, 2)
     pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
 
@@ -826,10 +818,12 @@ def draw_viewport_corner_meters(
     rr: int,
     state: Dict[str, Any],
     colors: Dict[str, Any],
+    marine_atlas: Optional[MarinePortraitAtlas],
     face_frames: List[pygame.Surface],
     plasma_frames: Dict[int, Optional[pygame.Surface]],
     plasma_decor: Optional[pygame.Surface],
     font_small: pygame.font.Font,
+    ticks_ms: int,
 ) -> None:
     fill = plasma_charge_fraction(state)
     lmax = int(GAME["meta"]["lanternMaxCarry"])
@@ -838,8 +832,9 @@ def draw_viewport_corner_meters(
     draw_plasma_lantern_meter(
         screen, lx, ly, rl, fill, plasma_frames, plasma_decor, colors, lantern_remaining, lmax, font_small
     )
-    fidx = player_face_frame_index(state)
-    draw_player_status_meter(screen, rx, ry, rr, fidx, face_frames, colors)
+    marine_surf = pick_marine_portrait_surface(marine_atlas, ticks_ms, state, fill)
+    legacy_idx = legacy_player_face_frame_index(state, GAME)
+    draw_player_status_meter(screen, rx, ry, rr, marine_surf, face_frames, legacy_idx, colors)
 
 
 def try_load_png(path: str) -> Optional[pygame.Surface]:
@@ -1943,6 +1938,7 @@ def run() -> int:
         pass
 
     ui_face_frames: List[pygame.Surface] = load_ui_player_face_frames()
+    marine_portrait_atlas: Optional[MarinePortraitAtlas] = load_marine_portrait_atlas(UI_DIR, try_load_png)
     plasma_orb_frames: Dict[int, Optional[pygame.Surface]] = load_plasma_orb_frames()
     plasma_orb_decor: Optional[pygame.Surface] = load_plasma_orb_decor()
 
@@ -2414,6 +2410,11 @@ def run() -> int:
             h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
             pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
 
+    PORTRAIT_EXCITED_MS = 2800
+
+    def bump_portrait_excited() -> None:
+        state["portraitExcitedUntil"] = int(pygame.time.get_ticks()) + PORTRAIT_EXCITED_MS
+
     def do_hotspot_click(hs: Dict[str, Any]) -> None:
         cmd = current_cmd()
         if cmd == "save":
@@ -2436,6 +2437,8 @@ def run() -> int:
         resolve_object_action(state, log, hs["id"], cmd, hs["kind"], acquired=acquired)
         for gid in acquired:
             item_popup_queue.append(gid)
+        if acquired:
+            bump_portrait_excited()
 
     def open_manual() -> None:
         nonlocal active_manual_popup
@@ -3151,6 +3154,8 @@ def run() -> int:
                                 ok = try_combination(state, log, state["heldItemId"], iid, acquired=acquired_inv)
                                 for gid in acquired_inv:
                                     item_popup_queue.append(gid)
+                                if acquired_inv:
+                                    bump_portrait_excited()
                                 if not ok:
                                     log.add("Those items refuse to cooperate. Probably for ethical reasons.", "warn")
                                     apply_action(state, "interact", log)
@@ -3162,12 +3167,16 @@ def run() -> int:
                                     if not had_breaker and has_item(state, "soulCoreBreaker"):
                                         for gid in acquired_inv:
                                             item_popup_queue.append(gid)
+                                        if acquired_inv:
+                                            bump_portrait_excited()
                                     else:
                                         state["heldItemId"] = None
                                     break
                                 ok_self = try_combination(state, log, iid, iid, acquired=acquired_inv)
                                 for gid in acquired_inv:
                                     item_popup_queue.append(gid)
+                                if acquired_inv:
+                                    bump_portrait_excited()
                                 if not ok_self:
                                     state["heldItemId"] = None
                                     apply_action(state, "inventory", log)
@@ -3364,10 +3373,12 @@ def run() -> int:
             meter_rr,
             state,
             colors,
+            marine_portrait_atlas,
             ui_face_frames,
             plasma_orb_frames,
             plasma_orb_decor,
             font_small,
+            pygame.time.get_ticks(),
         )
         if hovering_hotspot:
             # Bottom strip of the room: just above the viewport frame / panel transition, right of plasma meter

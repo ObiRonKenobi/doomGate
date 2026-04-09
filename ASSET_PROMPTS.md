@@ -64,8 +64,8 @@ All item sprites: **32×32 or 48×48 pixel art**, crisp, no anti-aliasing, trans
 ### Plasma Lantern (`plasmaLantern`)
 Pixel-art handheld lantern with UAC industrial casing, glass core glowing argent-green, small warning stripes, subtle grime.
 
-### Stimpack (`stimpack`)
-Pixel-art Doom-style stimpack syringe: red/white casing, needle cap, tiny green indicator light, slightly worn.
+### Vial of Demon Blood (`stimpack`)
+Pixel-art small glass vial of demon blood: dark crimson liquid with faint ember glow, cracked rune label, metal cap, slightly ominous. Transparent background, crisp pixel art.
 
 ### Red Access Keycard (`redKeycard`)
 Pixel-art red keycard with a clipped corner, UAC logo mark, barcode stripes, small chip.

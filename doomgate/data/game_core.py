@@ -61,8 +61,8 @@ def make_game_core() -> Dict[str, Any]:
             },
             "stimpack": {
                 "id": "stimpack",
-                "name": "Stimpack",
-                "desc": "A pressurized syringe of 'medical optimism.' It won't fix your life choices, but it might fix the next one.",
+                "name": "Vial of Demon Blood",
+                "desc": "A sealed vial of demonic blood. It’s warm in your hand like it remembers the body it came from.",
             },
             "redKeycard": {
                 "id": "redKeycard",

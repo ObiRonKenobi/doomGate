@@ -33,7 +33,7 @@ def build_rooms() -> Dict[str, Any]:
                         "onceFlag": "openedCrate",
                         "gain": ["stimpack"],
                         "addLanterns": 1,
-                        "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a Stimpack. The cell clamps to your harness; UAC still believes in benefits packages.",
+                        "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a vial of demon blood. The glass is warm, like it hates you personally.",
                     },
                     "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
                 },
@@ -127,7 +127,7 @@ def build_rooms() -> Dict[str, Any]:
             "objects": {
                 "seal": {
                     "look": "A blood-painted seal mixed with circuitry diagrams. Crux always did love cross-discipline collaboration.",
-                    "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You crack the Stimpack's seal and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
+                    "use": {"requiresItem": "stimpack", "onceFlag": "brokeSeal", "consumeHeld": True, "text": "You uncap the vial and let a few drops spatter the glyph. The blood sizzles. The demonic paint flakes away like cheap nail polish."},
                     "take": {"death": "sealFlays", "text": "You try to scrape the seal into your pocket. The seal tries to scrape you into the floor."},
                 }
             },

@@ -31,6 +31,7 @@ def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
         "alive": True,
         "godMode": False,
         "hotspotDebugUnlocked": False,
+        "portraitExcitedUntil": 0,
     }
 
 
@@ -47,6 +48,7 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     base.setdefault("lindaWrongCount", 0)
     base.setdefault("godMode", False)
     base.setdefault("hotspotDebugUnlocked", False)
+    base.setdefault("portraitExcitedUntil", 0)
     base.setdefault("inventory", [])
     ap_m = int(game["meta"]["actionsPerLantern"])
     sp_m = int(base.get("actions", 0)) // ap_m
