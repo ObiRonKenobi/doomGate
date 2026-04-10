@@ -387,14 +387,13 @@ _ROOMS_LEGACY = {
         "theme": "lift",
         "mapPos": [3, 3],
         "mapFloor": 0,
-        "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nCrux went down. The artifacts went down. The ruin below predates Mars—and it’s awake enough to notice you.",
-        "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
-        "exits": {"west": "quarters", "east": "labs", "down": "excavation", "north": "hellGateAntechamber"},
+        "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nDOWN lands at the excavation hatch—the last UAC seal before the dig. The breach beyond is not a shortcut. It’s a bill.",
+        "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare; beneath you is the hatch room, not the pit itself.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
+        "exits": {"west": "quarters", "east": "labs", "down": "excavationHatch"},
         "hotspots": [
             {"id": "toQuarters", "name": "Quarters", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "west"}},
             {"id": "toLabs", "name": "Labs", "rect": {"l": 78, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "east"}},
             {"id": "down", "name": "DOWN Button", "rect": {"l": 46, "t": 58, "w": 12, "h": 12}, "kind": "exit", "data": {"dir": "down"}},
-            {"id": "north", "name": "North Gate", "rect": {"l": 44, "t": 18, "w": 18, "h": 30}, "kind": "exit", "data": {"dir": "north"}},
         ],
     },
     "excavationHatch": {
@@ -404,11 +403,12 @@ _ROOMS_LEGACY = {
         "mapPos": [2, 4],
         "mapFloor": -1,
         "enterText": "The hatch is a boundary line—someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
-        "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nA biometric lock blinks an angry red.",
-        "exits": {"south": "maintenance", "north": "excavation"},
+        "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nThe freight lift opens onto this landing—DOWN from the service deck, UP when you need to breathe facility air again.\n\nA biometric lock blinks an angry red.",
+        "exits": {"south": "maintenance", "north": "excavation", "up": "templeLift"},
         "rules": {"gateToNorthRequiresFlag": "openedHatch"},
         "hotspots": [
             {"id": "toMaint", "name": "Maintenance", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
+            {"id": "toLift", "name": "Service Lift", "rect": {"l": 72, "t": 52, "w": 18, "h": 24}, "kind": "exit", "data": {"dir": "up"}},
             {"id": "hatch", "name": "Excavation Hatch", "rect": {"l": 46, "t": 18, "w": 18, "h": 30}, "kind": "barrier"},
         ],
         "objects": {
@@ -438,7 +438,7 @@ _ROOMS_LEGACY = {
         "mapPos": [3, 4],
         "mapFloor": -1,
         "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link—an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
-        "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
+        "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nStone stairs climb north toward the hell-gate threshold—there is no other way up from the dig.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
         "exits": {"south": "excavationHatch", "north": "hellGateAntechamber"},
         "hotspots": [
             {"id": "toHatch", "name": "Hatch", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -489,11 +489,11 @@ _ROOMS_LEGACY = {
         "mapPos": [4, 4],
         "mapFloor": -1,
         "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out—it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
-        "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
-        "exits": {"south": "templeLift", "north": "hellGateChamber"},
+        "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nSouth, the stone stairs return only to the excavation pit—the serpent threshold is never a lift ride away from the dig.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
+        "exits": {"south": "excavation", "north": "hellGateChamber"},
         "rules": {"gateToNorthRequiresFlag": "unlockedGate"},
         "hotspots": [
-            {"id": "toLift", "name": "Lift", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
+            {"id": "toExcavation", "name": "Stone Stairs", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
             {
                 "id": "toChamber",
                 "name": "Into the Hell-Gate",
@@ -2653,18 +2653,12 @@ def run() -> int:
 
     def launch_rbyt3r_minigame() -> None:
         """Run RBYT3R Epoch in a subprocess so DoomGate state and pygame stay intact."""
-        here = os.path.dirname(os.path.abspath(__file__))
         env_path = os.environ.get("RBYT3R_EPOCH_PATH", "").strip()
         candidates: List[str] = []
         if env_path:
             candidates.append(env_path)
-        candidates.extend(
-            [
-                os.path.join(here, "assets", "minigame", "rbyt3rEpoch_theGame"),
-                os.path.join(here, "rbyt3rEpoch_theGame"),
-                os.path.normpath(os.path.join(here, "..", "rbyt3rEpoch_theGame")),
-            ]
-        )
+        # ui_runtime lives under doomgate/; minigame is at project root assets/… (see resource_dir).
+        candidates.append(resource_path("assets", "minigame", "rbyt3rEpoch_theGame"))
         repo_root: Optional[str] = None
         for c in candidates:
             if c and os.path.isdir(os.path.join(c, "rbyt3r_epoch")):

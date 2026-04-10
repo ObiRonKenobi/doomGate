@@ -1,68 +1,156 @@
 Below is a beat-the-game sequence. In this game, doors and passages almost always use the USE command (not OPEN), unless noted.
 
+
+
 Legend
 
+
+
 HOLD item: click that inventory row so “Held” shows it.
+
 USE target: command USE, then click the hotspot.
+
 OPEN target: command OPEN, then click.
+
 TAKE target: command TAKE, then click.
+
 COMBINE A + B: HOLD A, command USE, click B in the inventory list.
+
+
+
 1 — Hangar (start)
+
 Security is east; Main Corridor is north—use the east door first on this route (do not go north to the corridor yet).
-OPEN: UAC Supply Crate → receive Stimpack and a lantern charge (not an item).
+
+OPEN: UAC Supply Crate → receive a Vial of Demon Blood and a lantern charge (not an item).
+
 USE: Security Door (east) → Security Checkpoint.
+
+
+
 2 — Red key (Security)
+
 TAKE: Security Corpse → Red Access Keycard.
+
 If you are not in Security, from Hangar USE the Security Door (east).
+
+
+
 3 — Armory (rifle, beacon, serpent key)
+
 USE: Armory Door (north) → Armory Annex.
+
 HOLD: Red Access Keycard.
+
 OPEN: Weapons Locker → Plasma Rifle (Uncharged) and Emergency Beacon.
+
 OPEN: Display Case → Serpentine Key.
+
 USE: Security (south) → back to Security Checkpoint.
+
+
+
 4 — Power cell & charged rifle
+
 USE: Maintenance Passage (east) → Maintenance Ductworks.
+
 TAKE: Argent Conduit → BFG Power Cell.
+
 COMBINE: Plasma Rifle (Uncharged) + Plasma Cell → Plasma Rifle (Charged).
+
+
+
 5 — Research Labs & Omega Crystal
+
 USE: Checkpoint Door (west) → Security → Hangar (west) → Main Corridor (north).
+
 USE: north Blast Door → Research Labs — Blast Door (labs antechamber).
-HOLD: Stimpack.
-USE: Blood Seal (consumes Stimpack; opens the lab route).
+
+HOLD: Vial of Demon Blood.
+
+USE: Blood Seal (consumes the vial; opens the lab route).
+
 USE: Into the Labs (north) → Research Labs — Argent Containment.
+
 TAKE: Argent Pedestal → Omega Crystal.
+
+
+
 6 — Soul-Core Breaker frame
+
 USE: Blast Door (south) → labs door room → Main Corridor (south).
+
 USE: Quarters Hall (east) → Living Quarters.
+
 OPEN: Cracked Panel → Soul-Core Breaker Frame.
-7 — Excavation & Hell Knight (Neural Link)
-USE: Service Lift (east) → Temple Lift.
-USE: DOWN Button → Excavation Site
-Alternate route: from Maintenance, USE north to Excavation Hatch room → OPEN Excavation Hatch (HOLD Red Keycard) → USE Excavation Hatch to enter the dig site.
-HOLD: Emergency Beacon. USE: Hell Knight (distracts it).
-HOLD: Plasma Rifle (Charged). USE: Hell Knight again (while it’s distracted).
-TAKE: Ritual Altar → Neural Link.
+
+
+
+7 — Excavation (hatch first, always)
+
+Both ways into the dig use the same Excavation Hatch room first (lift landing = hatch room).
+
+A) Service Lift route: USE Service Lift (east) → Temple Lift. USE: DOWN Button → Excavation Hatch — Sealed. HOLD: Red Access Keycard. OPEN: Excavation Hatch. USE: Excavation Hatch (duck through) → Excavation Site — Temple Breach.
+
+B) Maintenance route: from Maintenance Ductworks, USE north → Excavation Hatch (same room). HOLD: Red Access Keycard. OPEN: Excavation Hatch. USE: Excavation Hatch → Excavation Site.
+
+In the dig: HOLD Emergency Beacon, USE Hell Knight (distract). HOLD Plasma Rifle (Charged), USE Hell Knight again (kill while distracted). TAKE Ritual Altar → Neural Link.
+
+To go back up: from Excavation Site USE south → hatch room; then USE Service Lift (up) → Temple Lift, or USE Maintenance (south) toward Security.
+
+
+
 8 — Build the Soul-Core Breaker
+
 COMBINE: Soul-Core Breaker Frame + Omega Crystal (powers the frame).
+
 COMBINE: Soul-Core Breaker Frame + Neural Link.
+
 COMBINE: Soul-Core Breaker Frame + Serpentine Key (key stays in inventory for the door).
+
 COMBINE: Soul-Core Breaker Frame + Soul-Core Breaker Frame (USE frame on itself) → Soul-Core Breaker assembled and held (requires all three steps above).
-9 — Hell-Gate Antechamber & lock
-From Excavation, USE: Stone Stairs (north) → Hell-Gate Antechamber
-Or return to Temple Lift and USE: North Gate.
+
+
+
+9 — Hell-Gate Antechamber (serpent lock)
+
+From Excavation Site, the only link to the threshold is the Stone Stairs (north) → Hell-Gate Antechamber (no lift from the dig to the serpent lock).
+
 HOLD: Serpentine Key.
+
 USE: Serpentine Lock (unlocks the north exit to the chamber).
+
+
+
 10 — Ending
+
 USE: Into the Hell-Gate (north) → Hell-Gate Chamber.
+
 HOLD: Soul-Core Breaker.
+
 USE: Director Crux → win (gameWon).
+
+
+
 Avoid (instadeath / soft-lock hazards)
 
+
+
 Glowing Ooze Pool in the corridor (TAKE/USE/etc.).
+
 Hell Rift in the final chamber.
+
 Director Crux with USE without the Soul-Core Breaker held.
+
+
+
 Optional
 
+
+
 Hangar terminal: USE for L.I.N.D.A. (not required for the main quest).
+
 Quarters Intercom: LOOK / TALK for a hint about the Neural Link.
+
 Repo note: Use SAVE/LOAD as you like so you don’t repeat steps after deaths.
+

@@ -16,6 +16,8 @@ class WeaponType(str, Enum):
     SHOTGUN = "SHOTGUN"
     PLASMA = "PLASMA"
     MINIGUN = "MINIGUN"
+    ROCKET = "ROCKET"
+    BFG = "BFG"
 
 
 @dataclass
@@ -69,6 +71,34 @@ MINIGUN_WEAPON = Weapon(
     fire_rate=100,
     bullet_speed=14,
     color=(251, 191, 36),
+)
+
+ROCKET_WEAPON = Weapon(
+    type=WeaponType.ROCKET,
+    damage=28,
+    fire_rate=820,
+    bullet_speed=6,
+    color=(255, 120, 40),
+)
+
+BFG_WEAPON = Weapon(
+    type=WeaponType.BFG,
+    damage=9999,
+    fire_rate=2200,
+    bullet_speed=9,
+    color=(74, 222, 128),
+)
+
+
+# All firearms offered from armory picks (BFG is a separate milestone unlock).
+STANDARD_ARMORY_GUNS = frozenset(
+    {
+        WeaponType.PISTOL,
+        WeaponType.SHOTGUN,
+        WeaponType.PLASMA,
+        WeaponType.MINIGUN,
+        WeaponType.ROCKET,
+    }
 )
 
 

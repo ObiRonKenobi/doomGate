@@ -6,6 +6,16 @@ import sqlite3
 from pathlib import Path
 from typing import List, Tuple
 
+# Shipped with the game; shown until real players beat these scores (empty DB only).
+# Edit initials (3 letters) and scores before release.
+SHIPPED_HIGH_SCORES: List[Tuple[str, int]] = [
+    ("SDL", 88_888),
+    ("BYT", 77_770),
+    ("R3D", 66_660),
+    ("LDU", 55_550),
+    ("G8R", 44_440),
+]
+
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS leaderboard (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -24,7 +34,22 @@ def _connect(db_path: Path) -> sqlite3.Connection:
     return conn
 
 
+def ensure_default_scores(db_path: Path) -> None:
+    """If the leaderboard is empty, insert SHIPPED_HIGH_SCORES (first install / new save)."""
+    with _connect(db_path) as conn:
+        cur = conn.execute("SELECT COUNT(*) FROM leaderboard")
+        if int(cur.fetchone()[0]) > 0:
+            return
+        for initials, score in SHIPPED_HIGH_SCORES:
+            conn.execute(
+                "INSERT INTO leaderboard (initials, score) VALUES (?, ?)",
+                (initials.upper()[:3], int(score)),
+            )
+        conn.commit()
+
+
 def get_top_scores(db_path: Path, limit: int = 5) -> List[Tuple[str, int]]:
+    ensure_default_scores(db_path)
     with _connect(db_path) as conn:
         cur = conn.execute(
             "SELECT initials, score FROM leaderboard ORDER BY score DESC LIMIT ?",
