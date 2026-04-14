@@ -2782,9 +2782,11 @@ def run() -> int:
             )
             return
         try:
+            # The game uses relative paths like 'images/ship.bmp', so run from its package dir.
+            pkg_dir = os.path.join(repo_root, "InvadersOfSpace")
             subprocess.run(
-                [sys.executable, os.path.join("InvadersOfSpace", "alien_invasion.py")],
-                cwd=repo_root,
+                [sys.executable, "alien_invasion.py"],
+                cwd=pkg_dir,
                 check=False,
             )
         except OSError as exc:
