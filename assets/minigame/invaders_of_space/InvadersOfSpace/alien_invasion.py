@@ -5,6 +5,8 @@
 
 """
 
+import json
+import os
 import sys
 from time import sleep
 
@@ -33,11 +35,17 @@ class AlienInvasion:
         self.settings.screen_width = self.screen.get_rect().width
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Invaders of Space — BADONKS")
+        self.screen_rect = self.screen.get_rect()
 
         # Scoreboard for the
         # Measuring Contest
         self.stats = GameStats(self)
         self.sb = Scoreboard(self)
+
+        # Persistent high scores (top 5)
+        self.high_scores = self._load_high_scores()
+        self.stats.high_score = self.high_scores[0]["score"] if self.high_scores else 0
+        self.sb.prep_high_score()
 
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
@@ -48,12 +56,20 @@ class AlienInvasion:
         # Button
         self.play_button = Button(self, "Play")
 
+        # Auto-fire + high score entry
+        self.firing = False
+        self.last_fire_ms = 0
+        self.hs_entry_active = False
+        self.hs_initials = ""
+        self.hs_pending_score = 0
+
     def run_game(self):
         """ Ready... FIGHT!! """
         while True:
             self._check_events()
 
             if self.stats.game_active:
+                self._maybe_autofire()
                 self.ship.update()
                 self._update_bullets()
                 self._update_aliens()
@@ -77,6 +93,8 @@ class AlienInvasion:
         """just hit play!"""
         button_clicked = self.play_button.rect.collidepoint(mouse_pos)
         if button_clicked and not self.stats.game_active:
+            if self.hs_entry_active:
+                return
             # Fresh start
             self.settings.initialize_dynamic_settings()
 
@@ -97,9 +115,14 @@ class AlienInvasion:
 
             # Only One Blind Mouse included! Other Blind Mice sold separately!
             pygame.mouse.set_visible(False)
+            self.firing = False
+            self.last_fire_ms = 0
 
     def _check_keydown_events(self, event):
         """Buttons make light screen do funny things"""
+        if self.hs_entry_active:
+            self._handle_high_score_keydown(event)
+            return
         if event.key == pygame.K_RIGHT:
             self.ship.moving_right = True
         elif event.key == pygame.K_LEFT:
@@ -109,6 +132,7 @@ class AlienInvasion:
         elif event.key == pygame.K_q:
             sys.exit()
         elif event.key == pygame.K_SPACE:
+            self.firing = True
             self._fire_bullet()
 
     def _check_keyup_events(self, event):
@@ -117,6 +141,88 @@ class AlienInvasion:
             self.ship.moving_right = False
         elif event.key == pygame.K_LEFT:
             self.ship.moving_left = False
+        elif event.key == pygame.K_SPACE:
+            self.firing = False
+
+    def _maybe_autofire(self):
+        if not self.firing:
+            return
+        now = pygame.time.get_ticks()
+        if now - int(self.last_fire_ms) >= int(getattr(self.settings, "fire_cooldown_ms", 150)):
+            self.last_fire_ms = now
+            self._fire_bullet()
+
+    def _high_score_path(self) -> str:
+        return os.path.join(os.path.dirname(__file__), "highscores.json")
+
+    def _load_high_scores(self):
+        path = self._high_score_path()
+        try:
+            with open(path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            if isinstance(data, list):
+                out = []
+                for r in data:
+                    if isinstance(r, dict) and "initials" in r and "score" in r:
+                        out.append({"initials": str(r["initials"])[:3].upper(), "score": int(r["score"])})
+                out.sort(key=lambda x: x["score"], reverse=True)
+                return out[:5]
+        except Exception:
+            pass
+        return []
+
+    def _save_high_scores(self):
+        path = self._high_score_path()
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                json.dump(self.high_scores[:5], f, indent=2)
+        except Exception:
+            pass
+
+    def _qualifies_high_score(self, score: int) -> bool:
+        if score <= 0:
+            return False
+        if len(self.high_scores) < 5:
+            return True
+        return score > int(self.high_scores[-1]["score"])
+
+    def _begin_high_score_entry(self, score: int) -> None:
+        self.hs_entry_active = True
+        self.hs_initials = ""
+        self.hs_pending_score = int(score)
+        pygame.mouse.set_visible(True)
+
+    def _commit_high_score(self) -> None:
+        initials = (self.hs_initials.strip().upper() + "___")[:3]
+        self.high_scores.append({"initials": initials, "score": int(self.hs_pending_score)})
+        self.high_scores.sort(key=lambda x: x["score"], reverse=True)
+        self.high_scores = self.high_scores[:5]
+        self._save_high_scores()
+        self.stats.high_score = int(self.high_scores[0]["score"]) if self.high_scores else 0
+        self.sb.prep_high_score()
+        self.hs_entry_active = False
+        self.hs_initials = ""
+        self.hs_pending_score = 0
+
+    def _handle_high_score_keydown(self, event) -> None:
+        if event.key == pygame.K_ESCAPE:
+            self.hs_entry_active = False
+            self.hs_initials = ""
+            self.hs_pending_score = 0
+            return
+        if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
+            if len(self.hs_initials) == 3:
+                self._commit_high_score()
+            return
+        if event.key == pygame.K_BACKSPACE:
+            self.hs_initials = self.hs_initials[:-1]
+            return
+        ch = getattr(event, "unicode", "")
+        if not ch:
+            return
+        ch = ch.upper()
+        if len(self.hs_initials) < 3 and ("A" <= ch <= "Z" or "0" <= ch <= "9"):
+            self.hs_initials += ch
 
     def _fire_bullet(self):
         """No, Kenny! It's not pew-pew! It's BANG-BANG!!"""
@@ -201,6 +307,8 @@ class AlienInvasion:
         else:
             self.stats.game_active = False
             pygame.mouse.set_visible(True)
+            if self._qualifies_high_score(self.stats.score):
+                self._begin_high_score_entry(self.stats.score)
 
     def _create_fleet(self):
         """creates like an alien fleet.. or something like that."""
@@ -259,8 +367,44 @@ class AlienInvasion:
         # Press PLAY!
         if not self.stats.game_active:
             self.play_button.draw_button()
+            self._draw_high_score_panel()
 
         pygame.display.flip()
+
+    def _draw_high_score_panel(self):
+        # Simple overlay leaderboard + initials entry prompt
+        panel_w = min(520, self.screen_rect.w - 80)
+        panel_h = min(360, self.screen_rect.h - 120)
+        panel = pygame.Rect((self.screen_rect.w - panel_w) // 2, 110, panel_w, panel_h)
+        pygame.draw.rect(self.screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(self.screen, (30, 30, 30), panel, width=2, border_radius=10)
+
+        title_font = pygame.font.SysFont(None, 54)
+        body_font = pygame.font.SysFont(None, 40)
+        t = title_font.render("HIGH SCORES", True, (230, 230, 230))
+        self.screen.blit(t, t.get_rect(midtop=(panel.centerx, panel.top + 14)))
+
+        y = panel.top + 80
+        if not self.high_scores:
+            msg = body_font.render("No scores yet. Be the problem.", True, (210, 210, 210))
+            self.screen.blit(msg, msg.get_rect(center=(panel.centerx, y + 30)))
+            y += 70
+        else:
+            for i, row in enumerate(self.high_scores[:5], start=1):
+                line = f"{i}. {row['initials']:<3}   {int(row['score']):>6}"
+                s = body_font.render(line, True, (210, 210, 210))
+                self.screen.blit(s, (panel.left + 40, y))
+                y += 36
+
+        if self.hs_entry_active:
+            y2 = panel.bottom - 110
+            prompt = body_font.render("NEW HIGH SCORE! ENTER INITIALS:", True, (255, 230, 120))
+            self.screen.blit(prompt, prompt.get_rect(center=(panel.centerx, y2)))
+            initials = (self.hs_initials + "___")[:3]
+            ins = title_font.render(initials, True, (255, 230, 120))
+            self.screen.blit(ins, ins.get_rect(center=(panel.centerx, y2 + 55)))
+            hint = pygame.font.SysFont(None, 28).render("ENTER to save · ESC to cancel", True, (170, 170, 170))
+            self.screen.blit(hint, hint.get_rect(center=(panel.centerx, y2 + 92)))
 
 
 if __name__ == '__main__':

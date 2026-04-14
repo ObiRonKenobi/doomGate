@@ -30,9 +30,11 @@ class Settings:
 
     def initialize_dynamic_settings(self):
         """initializing speed variables like a boss!"""
-        self.ship_speed = 1.5
+        # Movement tuned for a windowed arcade feel (less twitchy than fullscreen defaults).
+        self.ship_speed = 0.85
         self.bullet_speed = 3.0
-        self.alien_speed = 0.35
+        # Start slower; ramps each wave.
+        self.alien_speed = 0.16
 
         # fleet_direction of 1 represents right; -1 represents left.
         self.fleet_direction = 1
@@ -40,9 +42,13 @@ class Settings:
         # yeah 50... why not...
         self.alien_points = 50
 
+        # Auto-fire tuning (ms between shots when holding SPACE).
+        self.fire_cooldown_ms = 150
+
     def increase_speed(self):
         """Quickly, now! Quickly!"""
-        self.ship_speed *= self.speedup_scale
+        # Ship speed ramps slowly; alien speed ramps more noticeably.
+        self.ship_speed *= min(self.speedup_scale, 1.06)
         self.bullet_speed *= self.speedup_scale
         self.alien_speed *= self.speedup_scale
 
