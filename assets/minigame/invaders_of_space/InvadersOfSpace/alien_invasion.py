@@ -95,33 +95,41 @@ class AlienInvasion:
         if button_clicked and not self.stats.game_active:
             if self.hs_entry_active:
                 return
-            # Fresh start
-            self.settings.initialize_dynamic_settings()
+            self._start_new_game()
 
-            # No Cheating!
-            self.stats.reset_stats()
-            self.stats.game_active = True
-            self.sb.prep_score()
-            self.sb.prep_level()
-            self.sb.prep_ships()
+    def _start_new_game(self) -> None:
+        # Fresh start
+        self.settings.initialize_dynamic_settings()
 
-            # All clear
-            self.aliens.empty()
-            self.bullets.empty()
+        # No Cheating!
+        self.stats.reset_stats()
+        self.stats.game_active = True
+        self.sb.prep_score()
+        self.sb.prep_level()
+        self.sb.prep_ships()
 
-            # Line 'em up!
-            self._create_fleet()
-            self.ship.center_ship()
+        # All clear
+        self.aliens.empty()
+        self.bullets.empty()
 
-            # Only One Blind Mouse included! Other Blind Mice sold separately!
-            pygame.mouse.set_visible(False)
-            self.firing = False
-            self.last_fire_ms = 0
+        # Line 'em up!
+        self._create_fleet()
+        self.ship.center_ship()
+
+        # Only One Blind Mouse included! Other Blind Mice sold separately!
+        pygame.mouse.set_visible(False)
+        self.firing = False
+        self.last_fire_ms = 0
 
     def _check_keydown_events(self, event):
         """Buttons make light screen do funny things"""
         if self.hs_entry_active:
             self._handle_high_score_keydown(event)
+            return
+        if not self.stats.game_active:
+            if event.key in (pygame.K_ESCAPE, pygame.K_q):
+                sys.exit()
+            self._start_new_game()
             return
         if event.key == pygame.K_RIGHT:
             self.ship.moving_right = True
@@ -251,6 +259,7 @@ class AlienInvasion:
         if collisions:
             for aliens in collisions.values():
                 self.stats.score += self.settings.alien_points * len(aliens)
+            self._check_extra_life_award()
             self.sb.prep_score()
             self.sb.check_high_score()
 
@@ -289,7 +298,8 @@ class AlienInvasion:
 
     def _ship_hit(self):
         """Get f***ed!"""
-        if self.stats.ships_left > 0:
+        # ships_left counts the current life too.
+        if self.stats.ships_left > 1:
             # Minus aliens equals plus points
             self.stats.ships_left -= 1
             self.sb.prep_ships()
@@ -309,6 +319,21 @@ class AlienInvasion:
             pygame.mouse.set_visible(True)
             if self._qualifies_high_score(self.stats.score):
                 self._begin_high_score_entry(self.stats.score)
+
+    def _check_extra_life_award(self) -> None:
+        """Grant +1 life every 500,000 points."""
+        step = 500_000
+        nxt = int(getattr(self.stats, "next_extra_life_at", step))
+        if nxt <= 0:
+            nxt = step
+        awarded = False
+        while int(self.stats.score) >= nxt:
+            self.stats.ships_left += 1
+            nxt += step
+            awarded = True
+        self.stats.next_extra_life_at = nxt
+        if awarded:
+            self.sb.prep_ships()
 
     def _create_fleet(self):
         """creates like an alien fleet.. or something like that."""

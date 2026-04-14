@@ -19,12 +19,13 @@ class Scoreboard:
         self.text_color = (30, 30, 30)
         self.font = pygame.font.SysFont(None, 48)
         self.font_small = pygame.font.SysFont(None, 30)
+        self._lives_bottom_y = 20
 
         # numbers and such.
+        self.prep_ships()
         self.prep_score()
         self.prep_high_score()
         self.prep_level()
-        self.prep_ships()
         self.prep_hint()
 
     def prep_score(self):
@@ -37,7 +38,7 @@ class Scoreboard:
         # Display current score, top-left (leave room for high score in the center)
         self.score_rect = self.score_image.get_rect()
         self.score_rect.left = 20
-        self.score_rect.top = 20
+        self.score_rect.top = int(getattr(self, "_lives_bottom_y", 20)) + 6
 
     def prep_high_score(self):
         """more pictures of numbers"""
@@ -79,6 +80,16 @@ class Scoreboard:
             ship.rect.x = 10 + ship_number * ship.rect.width
             ship.rect.y = 10
             self.ships.add(ship)
+        # Keep the score text below the lives meter.
+        if self.ships.sprites():
+            self._lives_bottom_y = max(s.rect.bottom for s in self.ships.sprites())
+        else:
+            self._lives_bottom_y = 20
+        # Reposition score/level now that lives height may have changed.
+        if hasattr(self, "score_rect"):
+            self.score_rect.top = int(self._lives_bottom_y) + 6
+        if hasattr(self, "level_rect"):
+            self.level_rect.top = self.score_rect.bottom + 10
 
     def check_high_score(self):
         """Is there a higher high score?"""
