@@ -55,5 +55,11 @@
       "w": 996,
       "h": 350
     }
-  }
+  },
+  "hud_plasma_dx": 867,
+  "hud_plasma_dy": -20,
+  "hud_plasma_scale": 1.4230769230769231,
+  "hud_portrait_dx": -864,
+  "hud_portrait_dy": -23,
+  "hud_portrait_scale": 1.4807692307692308
 }

@@ -705,6 +705,22 @@ def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int,
     return (lx, ly, r), (rx, ly, r)
 
 
+def apply_hud_corner_meter_layout(
+    viewport_rect: pygame.Rect, ov: Dict[str, Any]
+) -> Tuple[Tuple[int, int, int], Tuple[int, int, int], Tuple[int, int, int], Tuple[int, int, int]]:
+    """Apply saved HUD offsets/scales. Returns (plasma lx,ly,r), (portrait rx,ry,rr), base plasma anchor, base portrait anchor."""
+    (lx0, ly0, r0), (rx0, ry0, rr0) = viewport_corner_meter_layout(viewport_rect)
+    psc = float(ov.get("hud_plasma_scale", 1.0))
+    prc = float(ov.get("hud_portrait_scale", 1.0))
+    rl = max(8, int(r0 * psc))
+    rr = max(8, int(rr0 * prc))
+    lx = lx0 + int(ov.get("hud_plasma_dx", 0))
+    ly = ly0 + int(ov.get("hud_plasma_dy", 0))
+    rx = rx0 + int(ov.get("hud_portrait_dx", 0))
+    ry = ry0 + int(ov.get("hud_portrait_dy", 0))
+    return (lx, ly, rl), (rx, ry, rr), (lx0, ly0, r0), (rx0, ry0, rr0)
+
+
 def plasma_charge_fraction(state: Dict[str, Any]) -> float:
     """0..1 charge of the *active* lantern only (resets to 1.0 when a new lantern starts)."""
     if state.get("godMode"):
@@ -746,10 +762,10 @@ def draw_plasma_lantern_meter(
     font: pygame.font.Font,
 ) -> None:
     pct = plasma_percent_bucket(fill01)
+    orb_side = max(32, int(r * 2) + 4)
     surf = frames.get(pct) if frames else None
     if surf is not None:
-        side = max(32, int(r * 2) + 4)
-        scaled = pygame.transform.scale(surf, (side, side))
+        scaled = pygame.transform.scale(surf, (orb_side, orb_side))
         screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
     else:
         # Fallback: procedural fill + optional decor (no art assets yet)
@@ -768,8 +784,12 @@ def draw_plasma_lantern_meter(
             d = pygame.transform.smoothscale(decor, (dw, dh))
             screen.blit(d, d.get_rect(center=(cx, cy)))
     label = f"{lantern_remaining}/{lantern_max}"
-    tx = cx + r - font.size(label)[0] - 2
-    ty = cy - r + 2
+    lw, lh = font.size(label)
+    # Just above mid-height when measured from the bottom of the orb art (slightly past half-way up).
+    half = orb_side // 2
+    y_line = cy + half - int(0.55 * orb_side)
+    ty = y_line - lh // 2
+    tx = cx + half - lw - 2
     screen.blit(font.render(label, True, (0, 0, 0)), (tx + 1, ty + 1))
     screen.blit(font.render(label, True, colors["accent_dim"]), (tx, ty))
 
@@ -784,8 +804,6 @@ def draw_player_status_meter(
     legacy_frame_idx: int,
     colors: Dict[str, Any],
 ) -> None:
-    pygame.draw.circle(screen, (14, 18, 16), (cx, cy), r + 2)
-    pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
     img: Optional[pygame.Surface] = None
     if marine_surf is not None:
         img = marine_surf
@@ -796,15 +814,17 @@ def draw_player_status_meter(
         # Nearest-neighbor keeps chunky Doom-style pixel art sharp in the circular HUD.
         scaled = pygame.transform.scale(img, (side, side))
         screen.blit(scaled, scaled.get_rect(center=(cx, cy)))
-    else:
-        # Placeholder Doom-style mug until PNGs exist
-        fi = legacy_frame_idx
-        pygame.draw.circle(screen, (90, 72, 58), (cx, cy), r - 2)
-        eye = (255, 220, 200)
-        pygame.draw.circle(screen, eye, (cx - r // 3, cy - r // 8), max(3, r // 10))
-        pygame.draw.circle(screen, eye, (cx + r // 3, cy - r // 8), max(3, r // 10))
-        mouth_h = clamp(r // 4 + fi * 2, 2, r // 2)
-        pygame.draw.arc(screen, (40, 28, 24), pygame.Rect(cx - r // 2, cy, r, mouth_h), math.pi * 0.1, math.pi * 0.9, 2)
+        return
+    pygame.draw.circle(screen, (14, 18, 16), (cx, cy), r + 2)
+    pygame.draw.circle(screen, colors["accent"], (cx, cy), r + 2, width=2)
+    # Placeholder Doom-style mug until PNGs exist
+    fi = legacy_frame_idx
+    pygame.draw.circle(screen, (90, 72, 58), (cx, cy), r - 2)
+    eye = (255, 220, 200)
+    pygame.draw.circle(screen, eye, (cx - r // 3, cy - r // 8), max(3, r // 10))
+    pygame.draw.circle(screen, eye, (cx + r // 3, cy - r // 8), max(3, r // 10))
+    mouth_h = clamp(r // 4 + fi * 2, 2, r // 2)
+    pygame.draw.arc(screen, (40, 28, 24), pygame.Rect(cx - r // 2, cy, r, mouth_h), math.pi * 0.1, math.pi * 0.9, 2)
     pygame.draw.circle(screen, colors["accent_dim"], (cx, cy), r, width=1)
 
 
@@ -2360,6 +2380,26 @@ def run() -> int:
         nonlocal ui_layout_debug_drag
         if not debug_ui_layout:
             return False
+        (plx, ply, prl), (prx, pry, prr), (plx0, ply0, pr0), (prx0, pry0, prr0) = apply_hud_corner_meter_layout(
+            viewport_rect, ui_layout_ov
+        )
+        plasma_hit = pygame.Rect(plx - prl, ply - prl, 2 * prl, 2 * prl)
+        portrait_hit = pygame.Rect(prx - prr, pry - prr, 2 * prr, 2 * prr)
+        for meter_key, hit_r, bcx, bcy, br in (
+            ("hud_plasma", plasma_hit, plx0, ply0, float(pr0)),
+            ("hud_portrait", portrait_hit, prx0, pry0, float(prr0)),
+        ):
+            payload = ui_resize_handles_try_begin(hit_r, pos)
+            if payload:
+                ui_layout_debug_drag = {
+                    "region": meter_key,
+                    "hud_meter": meter_key,
+                    "base_cx": bcx,
+                    "base_cy": bcy,
+                    "base_r": br,
+                    **payload,
+                }
+                return True
         right_children = ("cmd_rect", "inv_rect", "map_rect", "held_rect")
         for region_key, lay_key, _col in UI_EDIT_REGION_ORDER:
             r = layout_state[lay_key]
@@ -2380,6 +2420,26 @@ def run() -> int:
         d = ui_layout_debug_drag
         if d is None:
             return
+        if d.get("hud_meter") == "hud_plasma":
+            parent = viewport_rect
+            new_r = ui_resize_handles_apply_motion(pos, d, parent, 16, 16)
+            ncx, ncy = new_r.center
+            ui_layout_ov["hud_plasma_dx"] = int(ncx - d["base_cx"])
+            ui_layout_ov["hud_plasma_dy"] = int(ncy - d["base_cy"])
+            br = max(float(d["base_r"]), 1.0)
+            scale = (min(new_r.w, new_r.h) / 2.0) / br
+            ui_layout_ov["hud_plasma_scale"] = max(8.0 / br, min(4.0, float(scale)))
+            return
+        if d.get("hud_meter") == "hud_portrait":
+            parent = viewport_rect
+            new_r = ui_resize_handles_apply_motion(pos, d, parent, 16, 16)
+            ncx, ncy = new_r.center
+            ui_layout_ov["hud_portrait_dx"] = int(ncx - d["base_cx"])
+            ui_layout_ov["hud_portrait_dy"] = int(ncy - d["base_cy"])
+            br = max(float(d["base_r"]), 1.0)
+            scale = (min(new_r.w, new_r.h) / 2.0) / br
+            ui_layout_ov["hud_portrait_scale"] = max(8.0 / br, min(4.0, float(scale)))
+            return
         region = str(d["region"])
         parent = ui_layout_parent_rect(region, layout_state)
         min_w, min_h = UI_EDIT_REGION_MINS[region]
@@ -2393,8 +2453,19 @@ def run() -> int:
             return
         d = ui_layout_debug_drag
         rk = str(d.get("region", ""))
-        rr = ui_layout_ov.get("regions", {}).get(rk)
-        log_sys(f"UI layout {rk} ({d.get('mode')}): {rr}")
+        if d.get("hud_meter") == "hud_plasma":
+            log_sys(
+                f"HUD plasma: dx={ui_layout_ov.get('hud_plasma_dx')} dy={ui_layout_ov.get('hud_plasma_dy')} "
+                f"scale={ui_layout_ov.get('hud_plasma_scale')}"
+            )
+        elif d.get("hud_meter") == "hud_portrait":
+            log_sys(
+                f"HUD portrait: dx={ui_layout_ov.get('hud_portrait_dx')} dy={ui_layout_ov.get('hud_portrait_dy')} "
+                f"scale={ui_layout_ov.get('hud_portrait_scale')}"
+            )
+        else:
+            rr = ui_layout_ov.get("regions", {}).get(rk)
+            log_sys(f"UI layout {rk} ({d.get('mode')}): {rr}")
         ui_layout_debug_drag = None
 
     def draw_ui_layout_debug_overlay() -> None:
@@ -2409,6 +2480,22 @@ def run() -> int:
             hsz = max(6, min(UI_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
             h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
             pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
+        vr = layout_state["viewport_rect"]
+        (plx, ply, prl), (prx, pry, prr), _, _ = apply_hud_corner_meter_layout(vr, ui_layout_ov)
+        for label, cx, cy, rad, col in (
+            ("plasma", plx, ply, prl, (100, 220, 255)),
+            ("portrait", prx, pry, prr, (255, 200, 120)),
+        ):
+            r = pygame.Rect(cx - rad, cy - rad, 2 * rad, 2 * rad)
+            dbg = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+            dbg.fill((*col, 22))
+            screen.blit(dbg, r.topleft)
+            pygame.draw.rect(screen, col, r, 1, border_radius=6)
+            hsz = max(6, min(UI_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
+            h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
+            pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
+            t = font_small.render(f"HUD {label}", True, col)
+            screen.blit(t, (r.x + 4, r.y + 4))
 
     PORTRAIT_EXCITED_MS = 2800
 
@@ -3242,8 +3329,8 @@ def run() -> int:
                         debug_ui_layout = not debug_ui_layout
                         if debug_ui_layout:
                             log_sys(
-                                "UI layout: all tinted panels — move body, edges = axis resize, corner = uniform scale "
-                                "(same as F3). Right column empty stripe = right_panel. F6 saves ui_layout.json."
+                                "UI layout: tinted panels + viewport HUD (plasma orb, portrait) — drag to move, "
+                                "corner = scale, edges = resize. F6 saves ui_layout.json (panels + HUD offsets)."
                             )
                         else:
                             ui_layout_debug_drag = None
@@ -3277,7 +3364,7 @@ def run() -> int:
         title = font_ui.render(GAME["meta"]["title"], True, colors["text"])
         screen.blit(title, (pad, pad))
         subtitle = font_small.render(
-            "Shadowgate • Mouse-only • F3/F4: hotspot layout • F5/F6: UI layout (minimap + Held)",
+            "Shadowgate • Mouse-only • F3/F4: hotspot layout • F5/F6: UI layout (panels + viewport HUD meters)",
             True,
             colors["muted"],
         )
@@ -3356,7 +3443,9 @@ def run() -> int:
                 pygame.draw.rect(screen, colors["hotspot_hover"], r, border_radius=6)
                 pygame.draw.rect(screen, colors["hotspot_border"], r, 1, border_radius=6)
 
-        (meter_lx, meter_ly, meter_r), (meter_rx, meter_ry, meter_rr) = viewport_corner_meter_layout(viewport_rect)
+        (meter_lx, meter_ly, meter_r), (meter_rx, meter_ry, meter_rr), _, _ = apply_hud_corner_meter_layout(
+            viewport_rect, ui_layout_ov
+        )
         draw_viewport_corner_meters(
             screen,
             meter_lx,
@@ -3375,9 +3464,22 @@ def run() -> int:
             pygame.time.get_ticks(),
         )
         if hovering_hotspot:
-            # Bottom strip of the room: just above the viewport frame / panel transition, right of plasma meter
-            tip_x = meter_lx + meter_r + 8
-            max_tip_w = max(120, (meter_rx - meter_rr - 8) - tip_x - 8)
+            # Strip between the two HUD orbs (order-independent — works if plasma/portrait are swapped).
+            p_left, p_right = meter_lx - meter_r, meter_lx + meter_r
+            f_left, f_right = meter_rx - meter_rr, meter_rx + meter_rr
+            (lo_l, lo_r), (hi_l, hi_r) = sorted([(p_left, p_right), (f_left, f_right)], key=lambda x: x[0])
+            margin = 8
+            gap_inner_left = lo_r + margin
+            gap_inner_right = hi_l - margin
+            vr = viewport_rect
+            if gap_inner_right > gap_inner_left + 40:
+                tip_x = gap_inner_left
+                max_tip_w = gap_inner_right - gap_inner_left
+            else:
+                tip_x = vr.left + 10
+                max_tip_w = vr.w - 20
+            tip_x = max(vr.left + 8, min(tip_x, vr.right - 12))
+            max_tip_w = max(48, min(max_tip_w, vr.right - 8 - tip_x))
             tip_lines = wrap_text_lines(font_small, hovering_hotspot, max_tip_w)
             ls = font_small.get_linesize()
             tip_h = len(tip_lines) * ls

@@ -88,6 +88,16 @@ def ui_layout_path() -> str:
     return writable_path(UI_LAYOUT_FILE)
 
 
+HUD_LAYOUT_KEYS = (
+    "hud_plasma_dx",
+    "hud_plasma_dy",
+    "hud_plasma_scale",
+    "hud_portrait_dx",
+    "hud_portrait_dy",
+    "hud_portrait_scale",
+)
+
+
 def default_ui_layout_overrides() -> Dict[str, Any]:
     return {
         "version": 2,
@@ -97,6 +107,12 @@ def default_ui_layout_overrides() -> Dict[str, Any]:
         "map_w": None,
         "map_h": None,
         "held_h": None,
+        "hud_plasma_dx": 0,
+        "hud_plasma_dy": 0,
+        "hud_plasma_scale": 1.0,
+        "hud_portrait_dx": 0,
+        "hud_portrait_dy": 0,
+        "hud_portrait_scale": 1.0,
     }
 
 
@@ -115,6 +131,9 @@ def load_ui_layout_overrides() -> Dict[str, Any]:
     if "regions" in data and isinstance(data["regions"], dict):
         ov["regions"] = dict(data["regions"])
     for k in ("map_dx", "map_dy", "map_w", "map_h", "held_h"):
+        if k in data:
+            ov[k] = data[k]
+    for k in HUD_LAYOUT_KEYS:
         if k in data:
             ov[k] = data[k]
     if "version" in data:
@@ -137,6 +156,9 @@ def save_ui_layout_overrides(ov: Dict[str, Any]) -> Tuple[bool, str]:
             v = ov.get(k)
             if v is not None:
                 out[k] = int(v)
+    for k in HUD_LAYOUT_KEYS:
+        if k in ov:
+            out[k] = ov[k]
     try:
         with open(path, "w", encoding="utf-8") as f:
             json.dump(out, f, indent=2)
