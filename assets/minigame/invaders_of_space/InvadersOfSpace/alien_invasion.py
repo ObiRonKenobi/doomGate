@@ -167,12 +167,14 @@ class AlienInvasion:
             return p
         return os.path.join(os.path.dirname(__file__), "highscores.json")
 
-    def _default_high_score_path(self) -> str:
-        return os.path.join(os.path.dirname(__file__), "highscores_default.json")
+    def _seed_high_score_path(self) -> str:
+        # Shipped seed scores (your dev highscores) live alongside the game.
+        return os.path.join(os.path.dirname(__file__), "highscores_seed.json")
 
     def _load_high_scores(self):
         path = self._high_score_path()
-        for candidate in (path, self._default_high_score_path()):
+        # Priority: player-save file first; if missing, fall back to shipped seed.
+        for candidate in (path, self._seed_high_score_path()):
             try:
                 with open(candidate, "r", encoding="utf-8") as f:
                     data = json.load(f)
