@@ -580,7 +580,7 @@ _ROOMS_LEGACY = {
 """
 apply_hotspot_layout_overrides(GAME)
 
-from doomgate.util.paths import resource_path
+from doomgate.util.paths import resource_path, writable_path
 
 ASSETS_DIR = resource_path("assets")
 ROOMS_DIR = resource_path("assets", "rooms")
