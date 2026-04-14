@@ -2762,6 +2762,34 @@ def run() -> int:
         except OSError as exc:
             log.add(f"Could not launch RBYT3R Epoch: {exc}", "warn")
 
+    def launch_invaders_minigame() -> None:
+        """Run Invaders of Space in a subprocess so DoomGate state and pygame stay intact."""
+        env_path = os.environ.get("INVADERS_OF_SPACE_PATH", "").strip()
+        candidates: List[str] = []
+        if env_path:
+            candidates.append(env_path)
+        candidates.append(resource_path("assets", "minigame", "invaders_of_space"))
+        repo_root: Optional[str] = None
+        for c in candidates:
+            if c and os.path.isfile(os.path.join(c, "InvadersOfSpace", "alien_invasion.py")):
+                repo_root = c
+                break
+        if repo_root is None:
+            log.add(
+                "Invaders of Space not found. Expected assets/minigame/invaders_of_space (or set INVADERS_OF_SPACE_PATH), "
+                "then enter BADONKS again.",
+                "warn",
+            )
+            return
+        try:
+            subprocess.run(
+                [sys.executable, os.path.join("InvadersOfSpace", "alien_invasion.py")],
+                cwd=repo_root,
+                check=False,
+            )
+        except OSError as exc:
+            log.add(f"Could not launch Invaders of Space: {exc}", "warn")
+
     def submit_linda_code() -> None:
         nonlocal active_linda_popup
         if active_linda_popup is None or active_linda_popup.get("phase") != "entry":
@@ -2780,6 +2808,8 @@ def run() -> int:
             active_linda_popup = None
             if action == "minigame_rbyt3r":
                 launch_rbyt3r_minigame()
+            elif action == "minigame_invaders":
+                launch_invaders_minigame()
             elif action == "god_mode":
                 enable_god_mode(state, log)
             return

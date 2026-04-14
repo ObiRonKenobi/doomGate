@@ -144,6 +144,7 @@ def make_game_core() -> Dict[str, Any]:
         ],
         "lindaTerminalCodes": {
             "stonks": {"action": "minigame_rbyt3r"},
+            "badonks": {"action": "minigame_invaders"},
             "rbyt3r": {"action": "god_mode"},
         },
         "manualText": "\n".join(

@@ -1,0 +1,18 @@
+Ronald W. Sudol III
+Invaders_of_Space
+Version 1.0
+completed 04/25/2023
+
+This Project is guided by the following book. Images are non-copyrighted materials for free and fair use obtained from
+https://nostarch.com/pythoncrashcourse2e/
+
+Citation:
+Matthes, E. (2019). Python Crash Course, 2nd Edition: A Hands-On,
+    Project-Based Introduction to Programming. No Starch Press.
+
+
+
+
+
+
+Rip and Tear!!
