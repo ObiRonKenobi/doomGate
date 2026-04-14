@@ -18,23 +18,25 @@ class Scoreboard:
         # Font and such
         self.text_color = (30, 30, 30)
         self.font = pygame.font.SysFont(None, 48)
+        self.font_small = pygame.font.SysFont(None, 30)
 
         # numbers and such.
         self.prep_score()
         self.prep_high_score()
         self.prep_level()
         self.prep_ships()
+        self.prep_hint()
 
     def prep_score(self):
         """pictures of numbers..."""
         rounded_score = round(self.stats.score, -1)
-        score_str = "Press Q to Quit... ya quitter!           {:,}".format(rounded_score)
+        score_str = "SCORE: {:,}".format(rounded_score)
         self.score_image = self.font.render(score_str, True,
                                             self.text_color, self.settings.bg_color)
 
-        # Display current score, top-right
+        # Display current score, top-left (leave room for high score in the center)
         self.score_rect = self.score_image.get_rect()
-        self.score_rect.right = self.screen_rect.right - 20
+        self.score_rect.left = 20
         self.score_rect.top = 20
 
     def prep_high_score(self):
@@ -62,6 +64,13 @@ class Scoreboard:
         self.level_rect.right = self.score_rect.right
         self.level_rect.top = self.score_rect.bottom + 10
 
+    def prep_hint(self):
+        """small hint text that won't collide with scores"""
+        self.hint_image = self.font_small.render("Q / ESC: Quit", True, self.text_color, self.settings.bg_color)
+        self.hint_rect = self.hint_image.get_rect()
+        self.hint_rect.right = self.screen_rect.right - 20
+        self.hint_rect.top = 26
+
     def prep_ships(self):
         """Gotta grab them 1-ups!!"""
         self.ships = Group()
@@ -81,5 +90,6 @@ class Scoreboard:
         """paint with all the colors of the wind"""
         self.screen.blit(self.score_image, self.score_rect)
         self.screen.blit(self.high_score_image, self.high_score_rect)
+        self.screen.blit(self.hint_image, self.hint_rect)
         self.screen.blit(self.level_image, self.level_rect)
         self.ships.draw(self.screen)
