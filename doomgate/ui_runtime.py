@@ -2784,9 +2784,12 @@ def run() -> int:
         try:
             # The game uses relative paths like 'images/ship.bmp', so run from its package dir.
             pkg_dir = os.path.join(repo_root, "InvadersOfSpace")
+            env = dict(os.environ)
+            env["BADONKS_HIGHSCORES_PATH"] = writable_path("badonks_highscores.json")
             subprocess.run(
                 [sys.executable, "alien_invasion.py"],
                 cwd=pkg_dir,
+                env=env,
                 check=False,
             )
         except OSError as exc:

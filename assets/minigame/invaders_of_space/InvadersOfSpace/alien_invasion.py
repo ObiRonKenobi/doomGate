@@ -161,22 +161,30 @@ class AlienInvasion:
             self._fire_bullet()
 
     def _high_score_path(self) -> str:
+        # DoomGate can provide a writable path via env var so packaged builds can persist scores.
+        p = os.environ.get("BADONKS_HIGHSCORES_PATH", "").strip()
+        if p:
+            return p
         return os.path.join(os.path.dirname(__file__), "highscores.json")
+
+    def _default_high_score_path(self) -> str:
+        return os.path.join(os.path.dirname(__file__), "highscores_default.json")
 
     def _load_high_scores(self):
         path = self._high_score_path()
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, list):
-                out = []
-                for r in data:
-                    if isinstance(r, dict) and "initials" in r and "score" in r:
-                        out.append({"initials": str(r["initials"])[:3].upper(), "score": int(r["score"])})
-                out.sort(key=lambda x: x["score"], reverse=True)
-                return out[:5]
-        except Exception:
-            pass
+        for candidate in (path, self._default_high_score_path()):
+            try:
+                with open(candidate, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if isinstance(data, list):
+                    out = []
+                    for r in data:
+                        if isinstance(r, dict) and "initials" in r and "score" in r:
+                            out.append({"initials": str(r["initials"])[:3].upper(), "score": int(r["score"])})
+                    out.sort(key=lambda x: x["score"], reverse=True)
+                    return out[:5]
+            except Exception:
+                pass
         return []
 
     def _save_high_scores(self):
