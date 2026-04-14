@@ -722,14 +722,13 @@ def apply_hud_corner_meter_layout(
 
 
 def plasma_charge_fraction(state: Dict[str, Any]) -> float:
-    """0..1 charge of the *active* lantern only (resets to 1.0 when a new lantern starts)."""
+    """0..1 fill of the plasma orb meter (manual drain)."""
     if state.get("godMode"):
         return 1.0
     ap = GAME["meta"]["actionsPerLantern"]
-    if ap <= 0 or state["lanterns"] <= 0:
+    if ap <= 0:
         return 0.0
-    seg = state["actions"] % ap
-    return float(ap - seg) / float(ap)
+    return max(0.0, min(1.0, float(state.get("plasma", 0)) / float(ap)))
 
 
 def _fill_circle_from_bottom(
@@ -847,7 +846,7 @@ def draw_viewport_corner_meters(
 ) -> None:
     fill = plasma_charge_fraction(state)
     lmax = int(GAME["meta"]["lanternMaxCarry"])
-    # Remaining charges (lanternCount − spent); orb label matches status PLASMA LANTERN line.
+    # Remaining charger packs carried.
     lantern_remaining = int(state.get("lanterns", 0))
     draw_plasma_lantern_meter(
         screen, lx, ly, rl, fill, plasma_frames, plasma_decor, colors, lantern_remaining, lmax, font_small
@@ -2028,7 +2027,7 @@ def run() -> int:
             else (
                 "SEALED"
                 if get_flag(state, "gameWon")
-                else ("DEBUG" if state.get("godMode") else ("CRITICAL" if state["lanterns"] <= 1 else "ACTIVE"))
+                else ("DEBUG" if state.get("godMode") else ("CRITICAL" if int(state.get("plasma", 0)) <= 3 else "ACTIVE"))
             )
         )
         gap = 18
@@ -2036,7 +2035,7 @@ def run() -> int:
         max_line_w = max(40, status_rect.w - inner_pad * 2)
         prefix = "ROOM: "
         tail_chunks = [
-            f"PLASMA LANTERN: {state['lanterns']}",
+            f"PLASMA CHARGERS: {int(state.get('lanterns', 0))}",
             f"ACTIONS: {state['actions']}",
             f"THREAT: {threat}",
         ]
@@ -3269,6 +3268,36 @@ def run() -> int:
                         continue
 
                     if viewport_rect.collidepoint(event.pos):
+                        # Plasma orb refill: HOLD Plasma Lantern Charger + USE on orb meter.
+                        if (
+                            not debug_hotspots
+                            and state.get("alive")
+                            and state.get("cmd") == "use"
+                            and state.get("heldItemId") == "plasmaCharger"
+                        ):
+                            (meter_lx, meter_ly, meter_r), _portrait, _, _ = apply_hud_corner_meter_layout(
+                                viewport_rect, ui_layout_ov
+                            )
+                            orb_rect = pygame.Rect(
+                                meter_lx - meter_r,
+                                meter_ly - meter_r,
+                                2 * meter_r,
+                                2 * meter_r,
+                            )
+                            if orb_rect.collidepoint(event.pos):
+                                if int(state.get("lanterns", 0)) <= 0:
+                                    log.add("No charger packs left.", "warn")
+                                    apply_action(state, "interact", log)
+                                    continue
+                                if int(state.get("plasma", 0)) >= int(GAME["meta"]["actionsPerLantern"]):
+                                    log.add("The orb is already full.", "dim")
+                                    apply_action(state, "inventory", log)
+                                    continue
+                                state["lanterns"] = int(state.get("lanterns", 0)) - 1
+                                apply_action(state, "charge_plasma", log)
+                                log.add("You seat a fresh pack into the charger and dump it into the orb. The glow steadies.", "sys")
+                                bump_portrait_excited()
+                                continue
                         if (
                             debug_hotspots
                             and not title_screen

@@ -13,9 +13,10 @@ def clamp_int(v: int, lo: int, hi: int) -> int:
 
 def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
     n0 = int(game["meta"]["startLanterns"])
+    ap = int(game["meta"]["actionsPerLantern"])
     return {
         "roomId": "hangar",
-        "inventory": [],
+        "inventory": ["plasmaCharger"],
         "heldItemId": None,
         "cmd": "look",
         "flags": {},
@@ -26,8 +27,10 @@ def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
         "pendingLindaTerminal": False,
         "lindaWrongCount": 0,
         "actions": game["meta"]["startActions"],
-        "lanternCount": n0,
+        # Charger packs you carry (consumed when refilling the orb meter).
         "lanterns": n0,
+        # Plasma orb remaining actions (drains every timed action; refilled by using the charger tool).
+        "plasma": ap,
         "alive": True,
         "godMode": False,
         "hotspotDebugUnlocked": False,
@@ -36,7 +39,7 @@ def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
 
 
 def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str, Any]:
-    """Merge a JSON-loaded dict onto defaults and normalize lantern fields."""
+    """Merge a JSON-loaded dict onto defaults and normalize plasma/charger fields."""
     base = default_state(game)
     base.update(loaded)
     base.setdefault("flags", {})
@@ -50,21 +53,20 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     base.setdefault("hotspotDebugUnlocked", False)
     base.setdefault("portraitExcitedUntil", 0)
     base.setdefault("inventory", [])
-    ap_m = int(game["meta"]["actionsPerLantern"])
-    sp_m = int(base.get("actions", 0)) // ap_m
+    if "plasmaCharger" not in base["inventory"]:
+        base["inventory"].insert(0, "plasmaCharger")
+
+    ap = int(game["meta"]["actionsPerLantern"])
     mx = int(game["meta"]["lanternMaxCarry"])
-    if "lanternCount" not in base or base.get("lanternCount") is None:
-        base["lanternCount"] = clamp_int(
-            int(base.get("lanterns", game["meta"]["startLanterns"])) + sp_m,
-            1,
-            mx,
-        )
-    base["lanternCount"] = clamp_int(int(base["lanternCount"]), 1, mx)
-    lc_m = int(base["lanternCount"])
-    if sp_m >= lc_m:
-        base["lanterns"] = 0
-    else:
-        base["lanterns"] = lc_m - sp_m
+    # Old saves may have lanternCount/lanterns computed from actions. We now treat lanterns as charger packs carried.
+    if "lanterns" not in base or base.get("lanterns") is None:
+        base["lanterns"] = int(game["meta"]["startLanterns"])
+    base["lanterns"] = clamp_int(int(base.get("lanterns", 0)), 0, mx)
+    # Plasma orb remaining actions. If missing, derive from old action segment (full when modulo is 0).
+    if "plasma" not in base or base.get("plasma") is None:
+        seg = int(base.get("actions", 0)) % max(ap, 1)
+        base["plasma"] = ap if seg == 0 else max(0, ap - seg)
+    base["plasma"] = clamp_int(int(base.get("plasma", ap)), 0, max(ap, 1))
     return base
 
 
@@ -92,9 +94,9 @@ def enable_god_mode(game: Dict[str, Any], state: Dict[str, Any], log: LogLike) -
     state["godMode"] = True
     state["alive"] = True
     mx = int(game["meta"]["lanternMaxCarry"])
-    state["lanternCount"] = mx
     state["actions"] = int(game["meta"]["startActions"])
     state["lanterns"] = mx
+    state["plasma"] = int(game["meta"]["actionsPerLantern"])
     for iid in game["items"].keys():
         if iid not in state["inventory"]:
             state["inventory"].append(iid)
@@ -140,14 +142,14 @@ def apply_action(game: Dict[str, Any], state: Dict[str, Any], kind: str, log: Lo
     if state.get("godMode"):
         return
     state["actions"] += cost
-    ap = game["meta"]["actionsPerLantern"]
-    spent = state["actions"] // ap
-    lc = int(state.get("lanternCount", game["meta"]["startLanterns"]))
-    if spent >= lc:
-        state["lanterns"] = 0
+    ap = int(game["meta"]["actionsPerLantern"])
+    state["plasma"] = int(state.get("plasma", ap)) - cost
+    if kind == "charge_plasma":
+        # Charging consumes time but refills the orb immediately afterward.
+        state["plasma"] = ap
+    if int(state.get("plasma", 0)) <= 0:
+        state["plasma"] = 0
         die(game, state, log, game["deaths"]["darkness"])
-    else:
-        state["lanterns"] = lc - spent
 
 
 def add_items(state: Dict[str, Any], items: List[str]) -> None:
@@ -300,6 +302,20 @@ def resolve_object_action(
         apply_action(game, state, "interact", log)
         return
 
+    if isinstance(handler, dict) and handler.get("special") == "cycleText":
+        lines = handler.get("lines")
+        if not isinstance(lines, list) or not lines:
+            log.add("Static. Whatever answer you wanted isn't on this channel.", "dim")
+            apply_action(game, state, "interact", log)
+            return
+        flag_key = str(handler.get("flag") or f"cycle_{state.get('roomId','')}_{obj_id}_{cmd}")
+        i = int(state.get("flags", {}).get(flag_key, 0))
+        text = str(lines[i % len(lines)])
+        log.add(text)
+        state.setdefault("flags", {})[flag_key] = i + 1
+        apply_action(game, state, "interact", log)
+        return
+
     # Death handler (skip when an option list handles branching — e.g. hatch pry vs. pass through)
     if handler.get("death") and not handler.get("options"):
         if handler.get("text"):
@@ -381,16 +397,12 @@ def resolve_object_action(
     add_lan = handler.get("addLanterns")
     if add_lan:
         mx = int(game["meta"]["lanternMaxCarry"])
-        lc0 = int(state.get("lanternCount", game["meta"]["startLanterns"]))
-        state["lanternCount"] = lc0
-        nl = min(mx, lc0 + int(add_lan))
-        if nl > lc0:
-            state["lanternCount"] = nl
-            ap = game["meta"]["actionsPerLantern"]
-            sp = state["actions"] // ap
-            state["lanterns"] = max(0, nl - sp)
+        cur = int(state.get("lanterns", 0))
+        nl = min(mx, cur + int(add_lan))
+        if nl > cur:
+            state["lanterns"] = nl
         else:
-            log.add("You can't carry any more Plasma Lantern charges.", "warn")
+            log.add("You can't carry any more Plasma Charger packs.", "warn")
 
     if handler.get("consumeHeld") and held:
         remove_items(state, [held])

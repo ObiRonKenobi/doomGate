@@ -33,7 +33,7 @@ def build_rooms() -> Dict[str, Any]:
                         "onceFlag": "openedCrate",
                         "gain": ["stimpack"],
                         "addLanterns": 1,
-                        "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a vial of demon blood. The glass is warm, like it hates you personally.",
+                        "text": "You pop the latch. Inside: a spare plasma charger pack and a vial of demon blood. The glass is warm, like it hates you personally.",
                     },
                     "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
                 },
@@ -172,7 +172,17 @@ def build_rooms() -> Dict[str, Any]:
             "objects": {
                 "intercom": {
                     "look": "The intercom sputters a faint signal that doesn't belong to UAC.\n\n\"Marine,\" the voice says softly, \"Crux moved the Neural Link to Excavation. He likes to keep his toys near his tomb.\"",
-                    "talk": "\"I'm here,\" you say.\n\n\"Regrettably,\" the intercom replies.",
+                    "talk": {
+                        "special": "cycleText",
+                        "flag": "quartersIntercomTalk",
+                        "lines": [
+                            "\"I'm here,\" you say.\n\n\"Regrettably,\" the intercom replies.",
+                            "\"Knock knock,\" you say into the speaker.\n\nA pause. Then Crux, dry as bone: \"Shut up, dude.\"",
+                            "\"If you can hear me, press one for 'haunted facility,'\" you say.\n\n\"Pressing one,\" Crux says. \"Also pressing 'end you.'\"",
+                            "\"You know, this intercom has great range,\" you say.\n\n\"So do my regrets,\" Crux answers. \"Stop talking.\"",
+                            "\"Any last words?\" you ask.\n\nCrux exhales. \"Yes. Less. From you.\"",
+                        ],
+                    },
                 },
                 "panel": {
                     "look": "A loose panel, pried open from inside. Someone hid something here with the urgency of a person who understood the concept of 'later.'",

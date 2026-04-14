@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-# Plasma lantern balance
+# Plasma orb + charger balance
 _ACTIONS_PER_LANTERN = 15
 _INITIAL_LANTERN_CHARGES = 3
 _LANTERN_MAX_CARRY = 5
@@ -54,10 +54,10 @@ def make_game_core() -> Dict[str, Any]:
             "riftTouch": "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name.",
         },
         "items": {
-            "plasmaLantern": {
-                "id": "plasmaLantern",
-                "name": "Plasma Lantern",
-                "desc": "A UAC-issued lantern that hums with caged argent. Its battery drains with every decision you make. Convenient.",
+            "plasmaCharger": {
+                "id": "plasmaCharger",
+                "name": "Plasma Lantern Charger",
+                "desc": "A UAC charger wand with a slot for spare plasma packs. HOLD it, then USE it on the plasma orb meter to refill the orb (consumes 1 charge).",
             },
             "stimpack": {
                 "id": "stimpack",
@@ -159,10 +159,12 @@ def make_game_core() -> Dict[str, Any]:
                 "- Click an INVENTORY item to hold it (for USE, OPEN, etc.).",
                 "- Use SAVE/LOAD often. Many actions can kill you instantly.",
                 "",
-                "PLASMA LANTERN (TORCH MECHANIC)",
-                "- Each significant action consumes time.",
-                f"- You start with {_INITIAL_LANTERN_CHARGES} lantern charges (max {_LANTERN_MAX_CARRY}); each charge lasts {_ACTIONS_PER_LANTERN} timed actions.",
-                "- Pickups can add charges (not inventory items). When the last charge empties, you are consumed by darkness.",
+                "PLASMA ORB + CHARGERS (MANUAL DRAIN)",
+                "- Each significant action drains the plasma orb meter.",
+                f"- The orb holds {_ACTIONS_PER_LANTERN} actions when full.",
+                f"- You start with {_INITIAL_LANTERN_CHARGES} charger packs (max {_LANTERN_MAX_CARRY}).",
+                "- HOLD the Plasma Lantern Charger, then USE it on the orb meter to refill the orb (consumes 1 pack).",
+                "- If the orb hits 0 and you haven't refilled it in time, darkness takes you.",
                 "",
                 "WIN CONDITION",
                 "- Assemble the Soul-Core Breaker and USE it on Director Crux in the Hell-Gate Chamber.",

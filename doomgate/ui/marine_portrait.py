@@ -133,13 +133,11 @@ def legacy_player_face_frame_index(state: Dict[str, Any], game: Dict[str, Any]) 
     if not state["alive"]:
         return 5
     ap = int(game["meta"]["actionsPerLantern"])
-    ud = max(0, ap - (state["actions"] % ap))
-    if state["lanterns"] <= 1 and state["alive"]:
-        if state["lanterns"] == 0:
-            return 5
-        if ud <= ap // 3:
-            return 4
-        return 3
-    if state["lanterns"] == 2 and ud <= ap // 4:
+    plasma_left = int(state.get("plasma", ap))
+    if plasma_left <= 0:
+        return 5
+    if plasma_left <= max(1, ap // 4):
+        return 4
+    if plasma_left <= max(2, ap // 2):
         return 2
-    return 1 if state["lanterns"] <= 2 else 0
+    return 0
