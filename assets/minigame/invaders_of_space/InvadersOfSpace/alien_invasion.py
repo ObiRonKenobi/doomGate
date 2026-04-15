@@ -14,7 +14,7 @@ from time import sleep
 
 import pygame
 
-from sfx import SR, make_doop, make_explosion, make_pew
+from sfx import SR, make_anger_cry, make_doop, make_explosion, make_midi_explode, make_pew
 from settings import Settings
 from game_stats import GameStats
 from scoreboard import Scoreboard
@@ -46,6 +46,8 @@ class AlienInvasion:
         self.sfx_pew = make_pew()
         self.sfx_doop = make_doop()
         self.sfx_explosion = make_explosion()
+        self.sfx_alien_explode = make_midi_explode()
+        self.sfx_anger = make_anger_cry()
 
         # Scoreboard for the
         # Measuring Contest
@@ -351,6 +353,7 @@ class AlienInvasion:
             if b in self.bullets:
                 self.bullets.remove(b)
             is_crusher = getattr(b, "style", "") == "crusher"
+            played_kill_sfx = False
             # Big crusher mask can overlap several aliens; pick epicenter at random when it does.
             if is_crusher and len(hit_list) > 1:
                 a0 = random.choice(hit_list)
@@ -360,6 +363,7 @@ class AlienInvasion:
             if a0 in self.aliens:
                 self.aliens.remove(a0)
                 hits += 1
+                played_kill_sfx = True
                 self._spawn_impact_fx(a0.rect.centerx, a0.rect.centery, 220, 16)
             # Crusher: immediate grid neighbors only (fleet places aliens 2*w apart, 2*h per row).
             if is_crusher:
@@ -400,7 +404,14 @@ class AlienInvasion:
                     if a is not None and a in self.aliens:
                         self.aliens.remove(a)
                         hits += 1
+                        played_kill_sfx = True
                         self._spawn_impact_fx(a.rect.centerx, a.rect.centery, 255, 18)
+
+            if played_kill_sfx:
+                try:
+                    self.sfx_alien_explode.play()
+                except Exception:
+                    pass
 
         if hits:
             self.stats.score += int(self.settings.alien_points) * hits
@@ -448,6 +459,10 @@ class AlienInvasion:
         """Get f***ed!"""
         # ships_left counts the current life too.
         if self.stats.ships_left > 1:
+            try:
+                self.sfx_anger.play()
+            except Exception:
+                pass
             # Minus aliens equals plus points
             self.stats.ships_left -= 1
             self.sb.prep_ships()
@@ -544,10 +559,8 @@ class AlienInvasion:
     def _spawn_weapon_powerup(self) -> None:
         if len(self.powerups) > 0:
             return
-        # Debug ordering: minigun, rocket, angular spread. (Will return to random later.)
-        seq = (3, 1, 2)
-        wid = seq[self.weapon_spawn_idx % len(seq)]
-        self.weapon_spawn_idx += 1
+        # Random weapon each spawn (1=dual minigun, 2=spread, 3=rocket/crusher).
+        wid = random.choice((1, 2, 3))
         pu = PowerUp(self, wid)
         # Spawn in the middle 50% of the top edge (so it doesn't immediately drift off-screen).
         pu.rect.centerx = random.randint(int(self.screen_rect.w * 0.25), int(self.screen_rect.w * 0.75))

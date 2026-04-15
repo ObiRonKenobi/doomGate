@@ -73,3 +73,45 @@ def make_explosion() -> pygame.mixer.Sound:
         s = 0.65 * n0 + rumble
         out.append(_clamp16(9000.0 * env * s))
     return _to_sound(out)
+
+
+def make_midi_explode() -> pygame.mixer.Sound:
+    """Alien kill: 'midi-ish' 8-bit chord hit + tiny noise burst."""
+    dur = 0.16
+    n = int(SR * dur)
+    out: List[int] = []
+
+    def det_noise(i: int) -> float:
+        x = (i * 1103515245 + 12345) & 0x7FFFFFFF
+        return (x / float(0x7FFFFFFF)) * 2.0 - 1.0
+
+    # Minor-ish stab: A4 + C5 + E5
+    freqs = (440.0, 523.25, 659.25)
+    for i in range(n):
+        t = i / SR
+        env = math.exp(-t * 18.0)
+        s = 0.0
+        for f in freqs:
+            s0 = math.sin(2.0 * math.pi * f * t)
+            s += 0.55 * math.copysign(1.0, s0) + 0.45 * s0
+        s /= len(freqs)
+        click = det_noise(i) * math.exp(-t * 55.0)
+        out.append(_clamp16((7200.0 * env * s) + (2600.0 * click)))
+    return _to_sound(out)
+
+
+def make_anger_cry() -> pygame.mixer.Sound:
+    """Life lost: short angry 'raaagh' — descending formant-y tone."""
+    dur = 0.28
+    n = int(SR * dur)
+    out: List[int] = []
+    for i in range(n):
+        t = i / SR
+        env = math.exp(-t * 9.5)
+        f = 420.0 - 260.0 * (i / max(1, n - 1))
+        base = math.sin(2.0 * math.pi * f * t)
+        harm = 0.55 * math.sin(2.0 * math.pi * (f * 2.02) * t)
+        grit = 0.22 * math.copysign(1.0, base)
+        s = 0.55 * base + 0.35 * harm + grit
+        out.append(_clamp16(8200.0 * env * s))
+    return _to_sound(out)
