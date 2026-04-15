@@ -287,7 +287,7 @@ class AlienInvasion:
         """Kill 'em Dead!"""
         # deuces!
         collisions = pygame.sprite.groupcollide(
-            self.bullets, self.aliens, True, True)
+            self.bullets, self.aliens, True, True, collided=pygame.sprite.collide_mask)
 
         if collisions:
             for aliens in collisions.values():

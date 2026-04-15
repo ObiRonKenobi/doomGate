@@ -12,8 +12,10 @@ class Alien(Sprite):
         self.settings = ai_game.settings
 
         # alien rectum
-        self.image = pygame.image.load('images/alien.bmp')
+        self.image = pygame.image.load('images/alien.bmp').convert()
+        self.image.set_colorkey((255, 255, 255))
         self.rect = self.image.get_rect()
+        self.mask = pygame.mask.from_surface(self.image)
 
         # start top left with these jabronis
         self.rect.x = self.rect.width

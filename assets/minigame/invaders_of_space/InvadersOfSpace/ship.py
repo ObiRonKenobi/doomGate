@@ -14,7 +14,8 @@ class Ship(Sprite):
         self.screen_rect = ai_game.screen.get_rect()
 
         # what ship?
-        self.image = pygame.image.load('images/ship.bmp')
+        self.image = pygame.image.load('images/ship.bmp').convert()
+        self.image.set_colorkey((255, 255, 255))
         self.rect = self.image.get_rect()
 
         # deja vu?
