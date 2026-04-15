@@ -6,7 +6,9 @@
 """
 
 import json
+import math
 import os
+import random
 import sys
 from time import sleep
 
@@ -20,6 +22,7 @@ from button import Button
 from ship import Ship
 from bullet import Bullet
 from alien import Alien
+from powerup import PowerUp
 
 
 class AlienInvasion:
@@ -57,6 +60,11 @@ class AlienInvasion:
         self.ship = Ship(self)
         self.bullets = pygame.sprite.Group()
         self.aliens = pygame.sprite.Group()
+        self.powerups = pygame.sprite.Group()
+        self.weapon_mode = 0  # 0=default, 1=dual, 2=spread, 3=crusher
+        self.weapon_until_ms = 0
+        self.weapon_spawn_idx = 0  # debug ordering for powerups
+        self.impact_fx = []  # (x,y,ttl_ms,r)
 
         self._create_fleet()
 
@@ -91,6 +99,7 @@ class AlienInvasion:
                 self._maybe_autofire()
                 self.ship.update()
                 self._update_bullets()
+                self._update_powerups()
                 self._update_aliens()
 
             self._update_screen()
@@ -130,6 +139,11 @@ class AlienInvasion:
         # All clear
         self.aliens.empty()
         self.bullets.empty()
+        self.powerups.empty()
+        self.weapon_mode = 0
+        self.weapon_until_ms = 0
+        self.weapon_spawn_idx = 0
+        self.impact_fx = []
 
         # Line 'em up!
         self._create_fleet()
@@ -175,7 +189,14 @@ class AlienInvasion:
         if not self.firing:
             return
         now = pygame.time.get_ticks()
-        if now - int(self.last_fire_ms) >= int(getattr(self.settings, "fire_cooldown_ms", 150)):
+        cd = int(getattr(self.settings, "fire_cooldown_ms", 150))
+        # Dual minigun: faster cadence.
+        if int(getattr(self, "weapon_mode", 0)) == 1:
+            cd = max(55, int(cd * 0.65))
+        # Rocket launcher: ~25% fire rate vs baseline.
+        if int(getattr(self, "weapon_mode", 0)) == 3:
+            cd = max(520, int(cd / 0.25))
+        if now - int(self.last_fire_ms) >= cd:
             self.last_fire_ms = now
             self._fire_bullet()
 
@@ -263,9 +284,45 @@ class AlienInvasion:
 
     def _fire_bullet(self):
         """No, Kenny! It's not pew-pew! It's BANG-BANG!!"""
-        if len(self.bullets) < self.settings.bullets_allowed:
-            new_bullet = Bullet(self)
-            self.bullets.add(new_bullet)
+        now = pygame.time.get_ticks()
+        if self.weapon_mode and now > int(self.weapon_until_ms):
+            self.weapon_mode = 0
+        allow = int(self.settings.bullets_allowed)
+        if self.weapon_mode == 1:
+            # Needs room for two bullets.
+            if len(self.bullets) > allow - 2:
+                return
+        elif self.weapon_mode == 2:
+            if len(self.bullets) > allow - 3:
+                return
+        elif len(self.bullets) >= allow:
+            return
+        if True:
+            spd = float(self.settings.bullet_speed)
+            if self.weapon_mode == 1:
+                # Two smaller parallel shots
+                # Streams aligned to ship edges.
+                ship = self.ship.rect
+                for x_center in (ship.left + 2, ship.right - 2):
+                    b = Bullet(self, vx=0.0, vy=-1.0, speed=spd * 1.45, style="dual")
+                    b.rect.centerx = x_center
+                    b.x = float(b.rect.x)
+                    self.bullets.add(b)
+            elif self.weapon_mode == 2:
+                # Center + +/-15 degrees
+                angs = (0.0, -15.0, 15.0)
+                for a in angs:
+                    rad = math.radians(a)
+                    vx = math.sin(rad)
+                    vy = -math.cos(rad)
+                    b = Bullet(self, vx=vx, vy=vy, speed=spd, style="spread")
+                    self.bullets.add(b)
+            elif self.weapon_mode == 3:
+                # Large slow crusher
+                b = Bullet(self, vx=0.0, vy=-1.0, speed=max(0.9, spd * 0.35), style="crusher")
+                self.bullets.add(b)
+            else:
+                self.bullets.add(Bullet(self, vx=0.0, vy=-1.0, speed=spd, style="default"))
             try:
                 self.sfx_pew.play()
             except Exception:
@@ -285,13 +342,54 @@ class AlienInvasion:
 
     def _check_bullet_alien_collisions(self):
         """Kill 'em Dead!"""
-        # deuces!
-        collisions = pygame.sprite.groupcollide(
-            self.bullets, self.aliens, True, True, collided=pygame.sprite.collide_mask)
+        hits = 0
+        for b in list(self.bullets.sprites()):
+            hit_list = pygame.sprite.spritecollide(b, self.aliens, False, collided=pygame.sprite.collide_mask)
+            if not hit_list:
+                continue
+            # Remove bullet
+            if b in self.bullets:
+                self.bullets.remove(b)
+            # Primary hit
+            a0 = hit_list[0]
+            if a0 in self.aliens:
+                self.aliens.remove(a0)
+                hits += 1
+                self._spawn_impact_fx(a0.rect.centerx, a0.rect.centery, 220, 16)
+            # Crusher: also destroy adjacent aliens (left/right neighbors in same row-ish)
+            if getattr(b, "style", "") == "crusher":
+                ax, ay = a0.rect.center
+                aw, ah = a0.rect.w, a0.rect.h
+                # Orthogonal 4-neighborhood: closest alien along each axis within one cell.
+                neigh = {"L": None, "R": None, "U": None, "D": None}
+                best = {"L": 1e9, "R": 1e9, "U": 1e9, "D": 1e9}
+                row_tol = max(8, int(ah * 0.45))
+                col_tol = max(8, int(aw * 0.45))
+                max_step_x = max(int(aw * 1.15), aw + 4)
+                max_step_y = max(int(ah * 1.15), ah + 4)
+                for a in list(self.aliens.sprites()):
+                    dx = a.rect.centerx - ax
+                    dy = a.rect.centery - ay
+                    if abs(dy) <= row_tol and dx < 0 and abs(dx) <= max_step_x and abs(dx) < best["L"]:
+                        best["L"] = abs(dx)
+                        neigh["L"] = a
+                    if abs(dy) <= row_tol and dx > 0 and abs(dx) <= max_step_x and abs(dx) < best["R"]:
+                        best["R"] = abs(dx)
+                        neigh["R"] = a
+                    if abs(dx) <= col_tol and dy < 0 and abs(dy) <= max_step_y and abs(dy) < best["U"]:
+                        best["U"] = abs(dy)
+                        neigh["U"] = a
+                    if abs(dx) <= col_tol and dy > 0 and abs(dy) <= max_step_y and abs(dy) < best["D"]:
+                        best["D"] = abs(dy)
+                        neigh["D"] = a
+                for a in neigh.values():
+                    if a is not None and a in self.aliens:
+                        self.aliens.remove(a)
+                        hits += 1
+                        self._spawn_impact_fx(a.rect.centerx, a.rect.centery, 255, 18)
 
-        if collisions:
-            for aliens in collisions.values():
-                self.stats.score += self.settings.alien_points * len(aliens)
+        if hits:
+            self.stats.score += int(self.settings.alien_points) * hits
             self._check_extra_life_award()
             self.sb.prep_score()
             self.sb.check_high_score()
@@ -305,6 +403,9 @@ class AlienInvasion:
             # BEEFCAKE!!!
             self.stats.level += 1
             self.sb.prep_level()
+            # Every 5 levels, spawn a weapon upgrade.
+            if self.stats.level % 5 == 0:
+                self._spawn_weapon_powerup()
 
     def _update_aliens(self):
         """
@@ -426,6 +527,40 @@ class AlienInvasion:
             except Exception:
                 pass
 
+    def _spawn_weapon_powerup(self) -> None:
+        if len(self.powerups) > 0:
+            return
+        # Debug ordering: minigun, rocket, angular spread. (Will return to random later.)
+        seq = (3, 1, 2)
+        wid = seq[self.weapon_spawn_idx % len(seq)]
+        self.weapon_spawn_idx += 1
+        pu = PowerUp(self, wid)
+        # Spawn in the middle 50% of the top edge (so it doesn't immediately drift off-screen).
+        pu.rect.centerx = random.randint(int(self.screen_rect.w * 0.25), int(self.screen_rect.w * 0.75))
+        # Spawn clearly above the fleet so it can't hide inside alien rows.
+        pu.rect.y = 18
+        pu.x = float(pu.rect.x)
+        pu.y = float(pu.rect.y)
+        self.powerups.add(pu)
+
+    def _update_powerups(self) -> None:
+        if not self.powerups:
+            return
+        self.powerups.update()
+        # Catch
+        caught = pygame.sprite.spritecollide(self.ship, self.powerups, True, collided=pygame.sprite.collide_rect)
+        if caught:
+            wid = int(getattr(caught[0], "weapon_id", 0))
+            self.weapon_mode = wid
+            self.weapon_until_ms = pygame.time.get_ticks() + 18_000  # limited duration
+        # Cleanup
+        for pu in list(self.powerups.sprites()):
+            if pu.rect.top > self.screen_rect.bottom:
+                self.powerups.remove(pu)
+
+    def _spawn_impact_fx(self, x: int, y: int, alpha: int, r: int) -> None:
+        self.impact_fx.append([int(x), int(y), 140, int(alpha), int(r)])
+
     def _update_screen(self):
         """in case the name of the funtion we're describing isn't
         indicative enough: This code updates the screen"""
@@ -437,6 +572,8 @@ class AlienInvasion:
         for bullet in self.bullets.sprites():
             bullet.draw_bullet()
         self.aliens.draw(self.screen)
+        self.powerups.draw(self.screen)
+        self._draw_impact_fx()
 
         # Who's keeping score?
         self.sb.show_score()
@@ -447,6 +584,20 @@ class AlienInvasion:
             self._draw_high_score_panel()
 
         pygame.display.flip()
+
+    def _draw_impact_fx(self) -> None:
+        if not self.impact_fx:
+            return
+        for fx in list(self.impact_fx):
+            fx[2] -= 16
+            if fx[2] <= 0:
+                self.impact_fx.remove(fx)
+                continue
+            x, y, ttl, alpha, r = fx
+            a = max(0, min(255, int(alpha * (ttl / 140.0))))
+            s = pygame.Surface((r * 2 + 2, r * 2 + 2), pygame.SRCALPHA)
+            pygame.draw.circle(s, (255, 255, 255, a), (r + 1, r + 1), r)
+            self.screen.blit(s, (x - r - 1, y - r - 1))
 
     def _draw_high_score_panel(self):
         # Simple overlay leaderboard + initials entry prompt
