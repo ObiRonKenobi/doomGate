@@ -358,17 +358,24 @@ class AlienInvasion:
                 self._begin_high_score_entry(self.stats.score)
 
     def _check_extra_life_award(self) -> None:
-        """Grant +1 life every 500,000 points."""
-        step = 500_000
-        nxt = int(getattr(self.stats, "next_extra_life_at", step))
+        """Grant +1 life at ramping score thresholds, capped at 10 lives total."""
+        max_lives = 10
+        step = int(getattr(self.stats, "extra_life_step", 500_000))
+        nxt = int(getattr(self.stats, "next_extra_life_at", 500_000))
+        if step <= 0:
+            step = 500_000
         if nxt <= 0:
             nxt = step
         awarded = False
-        while int(self.stats.score) >= nxt:
+        while int(self.stats.score) >= nxt and int(self.stats.ships_left) < max_lives:
             self.stats.ships_left += 1
+            awarded = True
             nxt += step
+            # Ramp the next award proportionally with scoring growth per wave.
+            step = max(step + 1, int(step * float(getattr(self.settings, "score_scale", 1.5))))
             awarded = True
         self.stats.next_extra_life_at = nxt
+        self.stats.extra_life_step = step
         if awarded:
             self.sb.prep_ships()
 

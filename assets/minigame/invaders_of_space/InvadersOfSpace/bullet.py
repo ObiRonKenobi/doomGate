@@ -19,21 +19,22 @@ class Bullet(Sprite):
         self.y = float(self.rect.y)
 
     def _make_fireball_surface(self) -> pygame.Surface:
-        w, h = 18, 26
+        # ~200% larger than prior (18x26).
+        w, h = 36, 52
         surf = pygame.Surface((w, h), pygame.SRCALPHA)
         cx = w // 2
 
-        # Outer glow (cyan)
-        pygame.draw.circle(surf, (0, 255, 255, 180), (cx, h - 12), 9)
-        pygame.draw.circle(surf, (0, 255, 255, 90), (cx, h - 12), 11)
+        # Outer glow (yellow)
+        pygame.draw.circle(surf, (255, 235, 80, 170), (cx, h - 24), 18)
+        pygame.draw.circle(surf, (255, 235, 80, 80), (cx, h - 24), 22)
 
-        # Teardrop core (royal blue + cyan highlight)
-        pts = [(cx, 0), (w - 4, h - 10), (cx, h - 2), (3, h - 10)]
-        pygame.draw.polygon(surf, (45, 95, 255, 235), pts)
-        pygame.draw.polygon(surf, (0, 240, 255, 210), [(cx, 3), (w - 7, h - 12), (cx, h - 6), (6, h - 12)])
+        # Teardrop core (red with yellow-hot inner)
+        pts = [(cx, 0), (w - 7, h - 20), (cx, h - 4), (6, h - 20)]
+        pygame.draw.polygon(surf, (255, 60, 40, 240), pts)
+        pygame.draw.polygon(surf, (255, 220, 80, 220), [(cx, 6), (w - 12, h - 24), (cx, h - 12), (11, h - 24)])
 
         # Little hot tip
-        pygame.draw.circle(surf, (230, 255, 255, 230), (cx, 4), 2)
+        pygame.draw.circle(surf, (255, 255, 220, 235), (cx, 8), 4)
         return surf
 
     def update(self):

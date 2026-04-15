@@ -17,5 +17,6 @@ class GameStats:
         self.ships_left = self.settings.ship_limit
         self.score = 0
         self.level = 1
-        # Extra life every N points.
+        # Extra lives: first at 500k, then the required points ramp up with the game's scoring.
+        self.extra_life_step = 500_000
         self.next_extra_life_at = 500_000
