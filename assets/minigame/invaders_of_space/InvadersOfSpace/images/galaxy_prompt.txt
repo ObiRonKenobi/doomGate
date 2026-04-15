@@ -1,0 +1,9 @@
+Gemini (Imagen / image generation) — pixel-art galaxy background for a retro space shooter
+
+Use this as the full prompt (edit aspect ratio if your tool requires it):
+
+---
+Pixel art, 16-bit SNES-era aesthetic, seamless-feeling starfield galaxy background for a 2D arcade game. Deep space scene: rich jewel-tone nebula clouds in magenta, violet, cyan, and warm orange accents; dense scatter of tiny multi-colored stars; subtle darker dust lanes; soft glowing gas tendrils; no spaceships, aliens, UI, or text; no characters; no lens flare text; crisp pixel grid, limited color palette, dithering allowed; mood: colorful, slightly ominous, playful retro sci-fi; composition: wide panoramic, balanced brightness so dark sprites read clearly in foreground; 4:3 or 16:9 friendly framing; high detail in pixels, not photographic realism.
+---
+
+Save the result as galaxy_bg.png in this folder (or .jpg / .webp — see alien_invasion._load_background_image).

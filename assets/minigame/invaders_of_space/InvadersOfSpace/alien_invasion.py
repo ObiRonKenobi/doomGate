@@ -12,6 +12,7 @@ from time import sleep
 
 import pygame
 
+from sfx import SR, make_doop, make_explosion, make_pew
 from settings import Settings
 from game_stats import GameStats
 from scoreboard import Scoreboard
@@ -26,6 +27,7 @@ class AlienInvasion:
 
     def __init__(self):
         """Initialize, start, let's play already!!"""
+        pygame.mixer.pre_init(SR, size=-16, channels=1, buffer=512)
         pygame.init()
         self.settings = Settings()
 
@@ -36,6 +38,11 @@ class AlienInvasion:
         self.settings.screen_height = self.screen.get_rect().height
         pygame.display.set_caption("Invaders of Space — BADONKS")
         self.screen_rect = self.screen.get_rect()
+
+        self.bg_image = self._load_background_image()
+        self.sfx_pew = make_pew()
+        self.sfx_doop = make_doop()
+        self.sfx_explosion = make_explosion()
 
         # Scoreboard for the
         # Measuring Contest
@@ -62,6 +69,18 @@ class AlienInvasion:
         self.hs_entry_active = False
         self.hs_initials = ""
         self.hs_pending_score = 0
+
+    def _load_background_image(self):
+        """Optional pixel-art galaxy: place images/galaxy_bg.png (see galaxy_prompt.txt)."""
+        for name in ("galaxy_bg.png", "galaxy_bg.jpg", "galaxy_bg.webp"):
+            path = os.path.join(os.path.dirname(__file__), "images", name)
+            if os.path.isfile(path):
+                try:
+                    img = pygame.image.load(path).convert()
+                    return pygame.transform.smoothscale(img, (self.screen_rect.w, self.screen_rect.h))
+                except Exception:
+                    pass
+        return None
 
     def run_game(self):
         """ Ready... FIGHT!! """
@@ -247,6 +266,10 @@ class AlienInvasion:
         if len(self.bullets) < self.settings.bullets_allowed:
             new_bullet = Bullet(self)
             self.bullets.add(new_bullet)
+            try:
+                self.sfx_pew.play()
+            except Exception:
+                pass
 
     def _update_bullets(self):
         """BYE!"""
@@ -325,6 +348,10 @@ class AlienInvasion:
             # Stop! Wait a minute!
             sleep(0.5)
         else:
+            try:
+                self.sfx_explosion.play()
+            except Exception:
+                pass
             self.stats.game_active = False
             pygame.mouse.set_visible(True)
             if self._qualifies_high_score(self.stats.score):
@@ -386,11 +413,19 @@ class AlienInvasion:
         for alien in self.aliens.sprites():
             alien.rect.y += self.settings.fleet_drop_speed
         self.settings.fleet_direction *= -1
+        if self.stats.game_active:
+            try:
+                self.sfx_doop.play()
+            except Exception:
+                pass
 
     def _update_screen(self):
         """in case the name of the funtion we're describing isn't
         indicative enough: This code updates the screen"""
-        self.screen.fill(self.settings.bg_color)
+        if self.bg_image is not None:
+            self.screen.blit(self.bg_image, (0, 0))
+        else:
+            self.screen.fill(self.settings.bg_color)
         self.ship.blitme()
         for bullet in self.bullets.sprites():
             bullet.draw_bullet()

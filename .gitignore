@@ -10,6 +10,7 @@ env/
 
 # Local saves (optional: remove this line if you want saves in the repo)
 savegame.json
+badonks_highscores.json
 
 # OS / editor
 Thumbs.db
