@@ -361,16 +361,43 @@ class AlienInvasion:
                 self.aliens.remove(a0)
                 hits += 1
                 self._spawn_impact_fx(a0.rect.centerx, a0.rect.centery, 220, 16)
-            # Crusher: kill entire horizontal row + vertical column through the struck alien.
+            # Crusher: immediate grid neighbors only (fleet places aliens 2*w apart, 2*h per row).
             if is_crusher:
                 ax, ay = a0.rect.center
                 aw, ah = a0.rect.w, a0.rect.h
+                step_x = 2.0 * float(aw)
+                step_y = 2.0 * float(ah)
                 row_tol = max(10, int(ah * 0.42))
                 col_tol = max(10, int(aw * 0.42))
+                lo_x, hi_x = step_x * 0.72, step_x * 1.38
+                lo_y, hi_y = step_y * 0.72, step_y * 1.38
+                neigh = {"L": None, "R": None, "U": None, "D": None}
+                best = {"L": 1e9, "R": 1e9, "U": 1e9, "D": 1e9}
                 for a in list(self.aliens.sprites()):
-                    on_row = abs(a.rect.centery - ay) <= row_tol
-                    on_col = abs(a.rect.centerx - ax) <= col_tol
-                    if (on_row or on_col) and a in self.aliens:
+                    dx = float(a.rect.centerx - ax)
+                    dy = float(a.rect.centery - ay)
+                    if abs(dy) <= row_tol and dx < 0:
+                        adx = abs(dx)
+                        if lo_x <= adx <= hi_x and adx < best["L"]:
+                            best["L"] = adx
+                            neigh["L"] = a
+                    if abs(dy) <= row_tol and dx > 0:
+                        adx = abs(dx)
+                        if lo_x <= adx <= hi_x and adx < best["R"]:
+                            best["R"] = adx
+                            neigh["R"] = a
+                    if abs(dx) <= col_tol and dy < 0:
+                        ady = abs(dy)
+                        if lo_y <= ady <= hi_y and ady < best["U"]:
+                            best["U"] = ady
+                            neigh["U"] = a
+                    if abs(dx) <= col_tol and dy > 0:
+                        ady = abs(dy)
+                        if lo_y <= ady <= hi_y and ady < best["D"]:
+                            best["D"] = ady
+                            neigh["D"] = a
+                for a in neigh.values():
+                    if a is not None and a in self.aliens:
                         self.aliens.remove(a)
                         hits += 1
                         self._spawn_impact_fx(a.rect.centerx, a.rect.centery, 255, 18)
