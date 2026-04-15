@@ -26,6 +26,7 @@ class MarinePortraitAtlas:
     scared: List[pygame.Surface]
     excited: List[pygame.Surface]
     dead: List[pygame.Surface]
+    god: List[pygame.Surface]
 
 
 def _sorted_png_group(
@@ -57,8 +58,9 @@ def load_marine_portrait_atlas(
     scared = _sorted_png_group(ui_dir, "marine_portrait_scared_", try_load_png)
     excited = _sorted_png_group(ui_dir, "marine_portrait_excited_", try_load_png)
     dead = _sorted_png_group(ui_dir, "marine_portrait_dead_", try_load_png)
+    god = _sorted_png_group(ui_dir, "marine_portrait_god_", try_load_png)
 
-    if not idle and not scared and not excited and not dead:
+    if not idle and not scared and not excited and not dead and not god:
         return None
 
     # Minimal fallbacks so logic never indexes an empty list
@@ -70,12 +72,15 @@ def load_marine_portrait_atlas(
         excited = idle[:1]
     if not dead:
         dead = idle[:1]
+    if not god:
+        god = idle[:1]
 
     return MarinePortraitAtlas(
         idle=list(idle),
         scared=list(scared),
         excited=list(excited),
         dead=list(dead),
+        god=list(god),
     )
 
 
@@ -110,7 +115,7 @@ def pick_marine_portrait_surface(
         # Victory death image: prefer dead_01 if it exists, else fall back to dead_00.
         return atlas.dead[1] if len(atlas.dead) > 1 else atlas.dead[0]
     if state.get("godMode"):
-        return atlas.idle[0]
+        return atlas.god[0] if atlas.god else atlas.idle[0]
 
     excited_until = int(state.get("portraitExcitedUntil", 0))
     if ticks_ms < excited_until and atlas.excited:

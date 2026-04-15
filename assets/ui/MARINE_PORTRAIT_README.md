@@ -12,6 +12,7 @@ The engine cycles **sorted filenames** per group (`idle_*`, `scared_*`, etc.). R
 | `marine_portrait_scared_*` | **3** | Scared + same three directions (fast cycle ~0.82s per step when orb charge **under 40%**) |
 | `marine_portrait_excited_*` | **2** | Item pickup flash (~2.8s); two frames give a quick “bounce” when cycled fast |
 | `marine_portrait_dead_*` | **1** | Defeat / death |
+| `marine_portrait_god_*` | **1** | God mode portrait (when `rbyt3r` cheat is active) |
 
 **Recommended total: 9 PNGs** (3 + 3 + 2 + 1).
 
@@ -32,6 +33,7 @@ Optional extras: add `marine_portrait_excited_02.png` or a second `marine_portra
 | `marine_portrait_excited_00.png` | Excited — primary |
 | `marine_portrait_excited_01.png` | Excited — alternate |
 | `marine_portrait_dead_00.png` | Dead — beaten / bloody |
+| `marine_portrait_god_00.png` | God mode — smirk + glowing eyes |
 
 If **no** `marine_portrait_*.png` files exist, the game falls back to optional `player_face_*.png`, then the built-in placeholder.
 
