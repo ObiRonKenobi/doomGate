@@ -14,8 +14,11 @@ class Ship(Sprite):
         self.screen_rect = ai_game.screen.get_rect()
 
         # what ship?
-        self.image = pygame.image.load('images/ship.bmp').convert()
-        self.image.set_colorkey((255, 255, 255))
+        # PNGs can carry alpha; if not, we still colorkey pure white as a fallback.
+        loaded = pygame.image.load('images/ship.png')
+        self.image = loaded.convert_alpha() if loaded.get_alpha() is not None else loaded.convert()
+        if self.image.get_alpha() is None:
+            self.image.set_colorkey((255, 255, 255))
         self.rect = self.image.get_rect()
 
         # deja vu?

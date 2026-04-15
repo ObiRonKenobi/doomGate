@@ -12,8 +12,10 @@ class Alien(Sprite):
         self.settings = ai_game.settings
 
         # alien rectum
-        self.image = pygame.image.load('images/alien.bmp').convert()
-        self.image.set_colorkey((255, 255, 255))
+        loaded = pygame.image.load('images/alien.png')
+        self.image = loaded.convert_alpha() if loaded.get_alpha() is not None else loaded.convert()
+        if self.image.get_alpha() is None:
+            self.image.set_colorkey((255, 255, 255))
         self.rect = self.image.get_rect()
         self.mask = pygame.mask.from_surface(self.image)
 
