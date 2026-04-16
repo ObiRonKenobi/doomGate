@@ -9,8 +9,9 @@ class GameStats:
         # start it... but don't... only kinda start it
         self.game_active = False
 
-        # itialize the shizz out that highscore
-        self.high_score = 0
+        # HUD "high score" is the player's personal best (not the shipped top-5 list).
+        # None means: no personal best recorded yet → display blank.
+        self.personal_best = None
 
     def reset_stats(self):
         """starting point"""

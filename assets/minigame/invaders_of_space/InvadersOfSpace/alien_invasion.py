@@ -54,9 +54,8 @@ class AlienInvasion:
         self.stats = GameStats(self)
         self.sb = Scoreboard(self)
 
-        # Persistent high scores (top 5)
-        self.high_scores = self._load_high_scores()
-        self.stats.high_score = self.high_scores[0]["score"] if self.high_scores else 0
+        # Persistent high scores (top 5 shipped + user updates) AND a separate personal best.
+        self.high_scores, self.stats.personal_best = self._load_high_scores()
         self.sb.prep_high_score()
 
         self.ship = Ship(self)
@@ -220,22 +219,42 @@ class AlienInvasion:
             try:
                 with open(candidate, "r", encoding="utf-8") as f:
                     data = json.load(f)
-                if isinstance(data, list):
+                personal_best = None
+                rows = None
+                if isinstance(data, dict):
+                    rows = data.get("top5")
+                    personal_best = data.get("personal_best", None)
+                elif isinstance(data, list):
+                    rows = data
+                if isinstance(rows, list):
                     out = []
-                    for r in data:
+                    for r in rows:
                         if isinstance(r, dict) and "initials" in r and "score" in r:
                             out.append({"initials": str(r["initials"])[:3].upper(), "score": int(r["score"])})
                     out.sort(key=lambda x: x["score"], reverse=True)
-                    return out[:5]
+                    pb = None
+                    try:
+                        if personal_best is not None:
+                            pb = int(personal_best)
+                    except Exception:
+                        pb = None
+                    return out[:5], pb
             except Exception:
                 pass
-        return []
+        return [], None
 
     def _save_high_scores(self):
         path = self._high_score_path()
         try:
             with open(path, "w", encoding="utf-8") as f:
-                json.dump(self.high_scores[:5], f, indent=2)
+                json.dump(
+                    {
+                        "top5": self.high_scores[:5],
+                        "personal_best": getattr(self.stats, "personal_best", None),
+                    },
+                    f,
+                    indent=2,
+                )
         except Exception:
             pass
 
@@ -258,8 +277,6 @@ class AlienInvasion:
         self.high_scores.sort(key=lambda x: x["score"], reverse=True)
         self.high_scores = self.high_scores[:5]
         self._save_high_scores()
-        self.stats.high_score = int(self.high_scores[0]["score"]) if self.high_scores else 0
-        self.sb.prep_high_score()
         self.hs_entry_active = False
         self.hs_initials = ""
         self.hs_pending_score = 0
@@ -418,6 +435,11 @@ class AlienInvasion:
             self._check_extra_life_award()
             self.sb.prep_score()
             self.sb.check_high_score()
+            # Persist personal best even if it doesn't reach the shipped top-5.
+            try:
+                self._save_high_scores()
+            except Exception:
+                pass
 
         if not self.aliens:
             # fuggit

@@ -44,8 +44,12 @@ class Scoreboard:
         """more pictures of numbers"""
         """#FIXME# the high score ends after game is closed. persistent highscore would require generating
         an accessible save file"""
-        high_score = round(self.stats.high_score, -1)
-        high_score_str = "{:,}".format(high_score)
+        pb = getattr(self.stats, "personal_best", None)
+        if pb is None or int(pb) <= 0:
+            high_score_str = ""
+        else:
+            high_score = round(int(pb), -1)
+            high_score_str = "{:,}".format(high_score)
         self.high_score_image = self.font.render(high_score_str, True,
                                                  self.text_color, self.settings.bg_color)
 
@@ -93,8 +97,9 @@ class Scoreboard:
 
     def check_high_score(self):
         """Is there a higher high score?"""
-        if self.stats.score > self.stats.high_score:
-            self.stats.high_score = self.stats.score
+        pb = getattr(self.stats, "personal_best", None)
+        if pb is None or int(self.stats.score) > int(pb):
+            self.stats.personal_best = int(self.stats.score)
             self.prep_high_score()
 
     def show_score(self):
