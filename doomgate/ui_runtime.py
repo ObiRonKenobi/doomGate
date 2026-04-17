@@ -589,12 +589,33 @@ PROPS_DIR = resource_path("assets", "props")
 UI_DIR = resource_path("assets", "ui")
 TITLE_DIR = resource_path("assets", "title")
 MUSIC_DIR = resource_path("assets", "music")
+SFX_DIR = resource_path("assets", "sfx")
 # Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
 TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
 # Title menu music in assets/title/ — preferred names first (extensions: .wav .ogg .mp3)
 TITLE_MUSIC_STEMS = ("title_menu", "menu", "title_music", "theme")
 # In-game looped music in assets/music/ — put **gameplay.wav** here (or .ogg/.mp3); see GAMEPLAY_MUSIC_STEMS order
 GAMEPLAY_MUSIC_STEMS = ("gameplay", "game", "ambient", "ingame")
+
+# One-shot voice line when the 4th Soul-Core Breaker piece is obtained.
+SOUL_CORE_PIECES = ("soulCoreFrame", "omegaCrystal", "neuralLink", "serpentineKey")
+SOUL_CORE_VOICE_FLAG = "heardAssembleSoulCoreBreaker"
+SOUL_CORE_VOICE_WAV = os.path.join(SFX_DIR, "assemble_soul_core_breaker.wav")
+_soul_core_voice_sound: Optional["pygame.mixer.Sound"] = None
+
+
+def _play_one_shot(path: str) -> None:
+    global _soul_core_voice_sound
+    try:
+        if pygame.mixer.get_init() is None:
+            return
+        if not os.path.isfile(path):
+            return
+        if _soul_core_voice_sound is None:
+            _soul_core_voice_sound = pygame.mixer.Sound(path)
+        _soul_core_voice_sound.play()
+    except Exception:
+        pass
 
 
 def resolve_title_music_path() -> Optional[str]:
@@ -1704,7 +1725,15 @@ def die(state: Dict[str, Any], log: ScrollLog, text: str) -> None:
 def add_items(state: Dict[str, Any], items: List[str]) -> None:
     from doomgate.game import add_items as _a
 
+    # Trigger one-time voice line exactly when the 4th unique piece is obtained, any order.
+    have_before = sum(1 for it in SOUL_CORE_PIECES if it in state.get("inventory", []))
     _a(state, items)
+    if get_flag(state, SOUL_CORE_VOICE_FLAG):
+        return
+    have_after = sum(1 for it in SOUL_CORE_PIECES if it in state.get("inventory", []))
+    if have_before < len(SOUL_CORE_PIECES) and have_after >= len(SOUL_CORE_PIECES):
+        set_flag(state, SOUL_CORE_VOICE_FLAG, True)
+        _play_one_shot(SOUL_CORE_VOICE_WAV)
 
 
 def remove_items(state: Dict[str, Any], items: List[str]) -> None:
