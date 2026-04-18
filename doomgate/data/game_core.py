@@ -7,6 +7,19 @@ _ACTIONS_PER_LANTERN = 15
 _INITIAL_LANTERN_CHARGES = 3
 _LANTERN_MAX_CARRY = 5
 
+_WHISTLE_LINES = [
+    "You whistle a tune you half-remember from boot camp. The facility doesn't sing along.",
+    "You whistle sharp... like you're calling a dog. Nothing loyal answers. Something hungry might be listening.",
+    "You whistle through your teeth. Your HUD annotates it as \"morale: theoretical.\"",
+    "You whistle off-key on purpose. Even chaos here has standards; it declines to applaud.",
+    "You whistle while you work. Shadowgate didn't survive on optimism, but it helps the hallway ego.",
+    "You try a wolf whistle. The UAC logo doesn't blush. The glyphs do... which is worse.",
+    "You whistle low and steady, like checking a mineshaft for bad ideas. The silence negotiates.",
+    "You whistle the way people whistle past graveyards. This graveyard whistles back, briefly, then pretends it didn't.",
+    "You whistle for a pickup. The only thing that arrives is self-awareness.",
+    "You whistle a victory fanfare early. The Crucible files it under \"premature\" and moves on.",
+]
+
 
 def make_game_core() -> Dict[str, Any]:
     """
@@ -32,31 +45,31 @@ def make_game_core() -> Dict[str, Any]:
             {"id": "use", "label": "USE"},
             {"id": "talk", "label": "TALK"},
             {"id": "open", "label": "OPEN"},
-            {"id": "close", "label": "CLOSE"},
+            {"id": "whistle", "label": "WHISTLE"},
             {"id": "save", "label": "SAVE"},
             {"id": "load", "label": "LOAD"},
         ],
         "deaths": {
-            "darkness": "The last Plasma Lantern dies. Blackness pours in—not empty dark, but hungry. Something that waited outside the light consumes you whole: no report, no remains, only the quiet proof that darkness here eats its fill.",
-            "slime": "The ooze isn't coolant. The moment you commit, it climbs armor seams like living acid. You don't melt in a movie-monster way—you simply stop being a solvable problem. The pool settles, a shade smugger than before.",
+            "darkness": "The last Plasma Lantern dies. Blackness pours in... not empty dark, but hungry. Something that waited outside the light consumes you whole: no report, no remains, only the quiet proof that darkness here eats its fill.",
+            "slime": "The ooze isn't coolant. The moment you commit, it climbs armor seams like living acid. You don't melt in a movie-monster way... you simply stop being a solvable problem. The pool settles, a shade smugger than before.",
             "crateTakeDeath": "You try to haul the entire crate like a hero lifting a trophy. Your spine disagrees with your casting. You go down hard on UAC decking and stay down. The hangar keeps breathing. Hours later, something hungry follows the smell of helpless.",
-            "hatchPryDeath": "You heave at the sealed excavation hatch with bare hands. The frame shifts, clamps, and bites. Hydraulics torque shut on meat and bone like a vise with standards. You don't die of drama—you die of being attached to steel that won't open.",
+            "hatchPryDeath": "You heave at the sealed excavation hatch with bare hands. The frame shifts, clamps, and bites. Hydraulics torque shut on meat and bone like a vise with standards. You don't die of drama... you die of being attached to steel that won't open.",
             "lockerKickDeath": "You USE the locker the way a boot USES a door. Reinforced UAC steel answers. Your knee loses the argument; your leg folds wrong. You end up on the armory floor, vision narrowing. Infection and thirst take the second shift; the demons only need you to still be here.",
-            "terminalFries": "The sigil doesn't stay on the glass—it completes through you. Voltage and something worse ride your nerves until the terminal gets the only reading it wants: zero.",
+            "terminalFries": "The sigil doesn't stay on the glass... it completes through you. Voltage and something worse ride your nerves until the terminal gets the only reading it wants: zero.",
             "terminalOverload": "The terminal accepts one wrong guess too many. Capacitors scream, argent bleed through the PCB, and the stack explodes like a bad IPO. Your last thought is that L.I.N.D.A. did warn you.",
-            "sealFlays": "You try to peel the blood-seal like a sticker. The glyph renegotiates ownership. It unthreads you layer by layer until there's nothing left to pocket—only a stain that used to be confident.",
-            "glassKills": "Possessed glass doesn't choose an exit vector—it chooses all of them. Shards go through your elbow decision and through you on the return trip. The display case ends up wearing more of you than you take from it.",
+            "sealFlays": "You try to peel the blood-seal like a sticker. The glyph renegotiates ownership. It unthreads you layer by layer until there's nothing left to pocket... only a stain that used to be confident.",
+            "glassKills": "Possessed glass doesn't choose an exit vector... it chooses all of them. Shards go through your elbow decision and through you on the return trip. The display case ends up wearing more of you than you take from it.",
             "knightKills": "The Hell Knight does not take questions. Claws and heat rewrite your posture in one motion. Your rifle never gets to file a dissenting opinion.",
-            "altarKnightKills": "You commit to reaching the altar anyway. The Hell Knight commits to stopping that story. It closes the distance the way a door closes—final, with metal.",
+            "altarKnightKills": "You commit to reaching the altar anyway. The Hell Knight commits to stopping that story. It closes the distance the way a door closes... final, with metal.",
             "cruxKills": "You bring fists and attitude to a boardroom hosted by a fused demon-executive. Crux answers with talons through the gaps in your armor. The rift applauds in heat.",
-            "conduitFry": "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again—business as usual.",
+            "conduitFry": "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again... business as usual.",
             "crystalFlash": "You press in close for a 'better look.' The Omega Crystal answers with a containment flash that goes through your visor and out the back of your thoughts. Your suit logs one heartbeat, then static.",
-            "riftTouch": "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word—only scatter, then silence, where something else learns your name.",
+            "riftTouch": "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word... only scatter, then silence, where something else learns your name.",
         },
         "items": {
             "plasmaCharger": {
                 "id": "plasmaCharger",
-                "name": "Plasma Lantern Charger",
+                "name": "Plasma Charger",
                 "desc": "A UAC charger wand with a slot for spare plasma packs. HOLD it, then USE it on the plasma orb meter to refill the orb (consumes 1 charge).",
             },
             "stimpack": {
@@ -112,7 +125,7 @@ def make_game_core() -> Dict[str, Any]:
             "soulCoreBreaker": {
                 "id": "soulCoreBreaker",
                 "name": "Soul-Core Breaker",
-                "desc": "A three-part exorcism strapped to a reactor. Point it at reality and pull the concept of 'no.'",
+                "desc": "Frame, crystal, mind, and key fused into one weapon. Point it at reality and pull the concept of 'no.'",
             },
         },
         "combinations": [
@@ -147,6 +160,7 @@ def make_game_core() -> Dict[str, Any]:
             "badonks": {"action": "minigame_invaders"},
             "rbyt3r": {"action": "god_mode"},
         },
+        "whistleLines": list(_WHISTLE_LINES),
         "manualText": "\n".join(
             [
                 "WELCOME TO DOOMGATE: THE WARLOCK'S CRUCIBLE",
@@ -154,21 +168,22 @@ def make_game_core() -> Dict[str, Any]:
                 "This is a mouse-driven, Shadowgate-style adventure.",
                 "",
                 "HOW TO PLAY",
-                "- Click a COMMAND (LOOK/TAKE/USE/TALK/OPEN/CLOSE).",
+                "- Click a COMMAND (LOOK/TAKE/USE/TALK/OPEN/WHISTLE).",
                 "- Click objects in the viewport to apply the command.",
                 "- Doors and exits: select USE, then click the door/passage to move.",
                 "- Click an INVENTORY item to hold it (for USE, OPEN, etc.).",
                 "- Use SAVE/LOAD often. Many actions can kill you instantly.",
                 "",
                 "PLASMA ORB + CHARGERS (MANUAL DRAIN)",
-                "- Each significant action drains the plasma orb meter.",
+                "- LOOK and WHISTLE do not drain the plasma orb meter (WHISTLE is flavor... unless something listens).",
+                "- Other commands (TAKE/USE/TALK/OPEN, failed attempts, etc.) drain the orb.",
                 f"- The orb holds {_ACTIONS_PER_LANTERN} actions when full.",
                 f"- You start with {_INITIAL_LANTERN_CHARGES} charger packs (max {_LANTERN_MAX_CARRY}).",
-                "- HOLD the Plasma Lantern Charger, then USE it on the orb meter to refill the orb (consumes 1 pack).",
+                "- HOLD the Plasma Charger, then USE it on the orb meter to refill the orb (consumes 1 pack).",
                 "- If the orb hits 0 and you haven't refilled it in time, darkness takes you.",
                 "",
                 "WIN CONDITION",
-                "- Assemble the Soul-Core Breaker and USE it on Director Crux in the Hell-Gate Chamber.",
+                "- Assemble the Soul-Core Breaker from the frame plus Omega Crystal, Neural Link, and Serpentine Key; then USE it on Director Crux in the Hell-Gate Chamber.",
             ]
         ),
         "victoryOutro": {
@@ -183,13 +198,13 @@ def make_game_core() -> Dict[str, Any]:
             "body": (
                 "Congratulations, Marine. You held the line when the line was a bleeding fault in reality.\n\n"
                 "Mars keeps spinning. The hell-gate is shut; the rift stops begging for a wider doorway. "
-                "What you did will never read clean on a UAC incident report—and that is exactly how you know "
+                "What you did will never read clean on a UAC incident report... and that is exactly how you know "
                 "it counted.\n\n"
-                "But endings bill themselves in bruises, not brass bands. The seal tears loose as violence—compressed thunder, "
+                "But endings bill themselves in bruises, not brass bands. The seal tears loose as violence... compressed thunder, "
                 "then shrapnel, stone, white-hot splinters hunting for meat. Your armor becomes a rumor. "
                 "Your body becomes a casualty of physics doing what physics does when hell slams a door.\n\n"
                 "You sink into rubble and noise: alarms shredding themselves, bulkheads shearing, dust like snow made "
-                "of broken teeth. Vision tunnels. The world turns to bedlam—then smaller, and smaller still.\n\n"
+                "of broken teeth. Vision tunnels. The world turns to bedlam... then smaller, and smaller still.\n\n"
                 "Somewhere in the pandemonium, the intercom claws its way through static. Not L.I.N.D.A. Not calm. "
                 "Not corporate. Just three words, barked like a warning shot:\n\n"
                 "    \"SLAYER IN COMING!\"\n\n"

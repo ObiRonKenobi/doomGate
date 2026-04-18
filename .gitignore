@@ -8,8 +8,12 @@ __pycache__/
 venv/
 env/
 
-# Local saves (optional: remove this line if you want saves in the repo)
+# Runtime user data (same idea as badonks highscores — not shipped; created locally)
+audio_settings.json
 savegame.json
+savegame1.json
+savegame2.json
+savegame3.json
 badonks_highscores.json
 
 # OS / editor

@@ -14,7 +14,8 @@ import pygame
 # Core data (rooms still defined below for now)
 # -----------------------------
 from doomgate.data.game_core import make_game_core
-from doomgate.game import merge_loaded_save
+from doomgate.save_slots import load_slot_into_state, peek_slot, write_slot
+from doomgate.util.paths import writable_path
 from doomgate.ui.marine_portrait import (
     MarinePortraitAtlas,
     legacy_player_face_frame_index,
@@ -23,6 +24,53 @@ from doomgate.ui.marine_portrait import (
 )
 
 GAME: Dict[str, Any] = make_game_core()
+
+
+def _split_oversized_word(font: pygame.font.Font, word: str, max_px: int) -> List[str]:
+    """Split a single token into chunks that fit within max_px width."""
+    max_px = max(12, int(max_px))
+    if not word:
+        return []
+    out: List[str] = []
+    chunk = ""
+    for ch in word:
+        trial = chunk + ch
+        if font.size(trial)[0] <= max_px:
+            chunk = trial
+        else:
+            if chunk:
+                out.append(chunk)
+            chunk = ch
+    if chunk:
+        out.append(chunk)
+    return out if out else [word]
+
+
+def _wrap_ui_text(font: pygame.font.Font, text: str, max_px: int) -> List[str]:
+    """Word-wrap label text to fit inventory bubble width."""
+    max_px = max(12, int(max_px))
+    words = text.split()
+    if not words:
+        return [""]
+    lines: List[str] = []
+    cur = ""
+    for word in words:
+        trial = word if not cur else f"{cur} {word}"
+        if font.size(trial)[0] <= max_px:
+            cur = trial
+            continue
+        if cur:
+            lines.append(cur)
+            cur = ""
+        if font.size(word)[0] <= max_px:
+            cur = word
+        else:
+            parts = _split_oversized_word(font, word, max_px)
+            lines.extend(parts[:-1])
+            cur = parts[-1]
+    if cur:
+        lines.append(cur)
+    return lines
 
 
 def rect_from_pct(x: float, y: float, w: float, h: float, parent: pygame.Rect) -> pygame.Rect:
@@ -203,11 +251,11 @@ Rooms now live in `doomgate/data/rooms.py`.
 _ROOMS_LEGACY = {
     "hangar": {
         "id": "hangar",
-        "name": "Hangar Intake — The Crucible Facility",
+        "name": "Hangar Intake ... The Crucible Facility",
         "theme": "hangar",
         "mapPos": [0, 2],
         "mapFloor": 0,
-        "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site—an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
+        "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site... an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
         "desc": "You stand in the hangar intake of the Crucible Facility. UAC steel ribs arch overhead, but the walls are scored with runes that look like they were etched by a knife made of screaming.\n\nA flickering terminal repeats a single line: \"L.I.N.D.A. ONLINE\".\nThe air smells of ozone, blood, and corporate denial.",
         "exits": {"north": "corridor", "east": "security"},
         "hotspots": [
@@ -218,7 +266,7 @@ _ROOMS_LEGACY = {
         ],
         "objects": {
             "terminal": {
-                "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
+                "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. Assemble the Soul-Core Breaker: the frame, then the crystal, the link, and the key... four pieces. Don't be brave... be correct.\"",
                 "talk": "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
                 "use": {"special": "lindaTerminal"},
             },
@@ -226,9 +274,9 @@ _ROOMS_LEGACY = {
                 "look": "A dented supply crate with a UAC latch. Something inside hums politely.",
                 "open": {
                     "onceFlag": "openedCrate",
-                    "gain": ["stimpack"],
+                    "gain": ["plasmaCharger", "stimpack"],
                     "addLanterns": 1,
-                    "text": "You pop the latch. Inside: a spare Plasma Lantern charge and a vial of demon blood. The glass is warm, like it hates you personally.",
+                    "text": "You pop the latch. Inside: a Plasma Charger, a spare plasma pack, and a vial of demon blood. The glass is warm, like it hates you personally.",
                 },
                 "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
             },
@@ -236,11 +284,11 @@ _ROOMS_LEGACY = {
     },
     "corridor": {
         "id": "corridor",
-        "name": "Main Corridor — Steel & Sigils",
+        "name": "Main Corridor ... Steel & Sigils",
         "theme": "corridor",
         "mapPos": [1, 2],
         "mapFloor": 0,
-        "enterText": "The facility’s spine is still lit, still humming—like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
+        "enterText": "The facility’s spine is still lit, still humming... like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
         "desc": "A long corridor of brushed metal and bad decisions. Emergency lights pulse red. Demonic glyphs crawl over the UAC logos as if mocking the concept of branding.\n\nTo the north, a blast door leads to the Research Labs. To the east, the Living Quarters stink of old fear.",
         "exits": {"south": "hangar", "north": "labsDoor", "east": "quarters"},
         "hotspots": [
@@ -256,13 +304,13 @@ _ROOMS_LEGACY = {
                 "use": {"death": "slime"},
                 "open": {"death": "slime"},
                 "talk": {"death": "slime"},
-                "close": {"death": "slime"},
+                "whistle": {"death": "slime"},
             }
         },
     },
     "security": {
         "id": "security",
-        "name": "Security Checkpoint — Locked Teeth",
+        "name": "Security Checkpoint ... Locked Teeth",
         "theme": "security",
         "mapPos": [0, 3],
         "mapFloor": 0,
@@ -284,11 +332,11 @@ _ROOMS_LEGACY = {
     },
     "maintenance": {
         "id": "maintenance",
-        "name": "Maintenance Ductworks — The Belly of UAC",
+        "name": "Maintenance Ductworks ... The Belly of UAC",
         "theme": "maintenance",
         "mapPos": [1, 3],
         "mapFloor": 0,
-        "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry—drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
+        "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry... drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
         "desc": "Pipes. Steam. The sound of something large breathing where no lungs should be. A broken panel reveals a power conduit pulsing with argent.\n\nA sealed hatch to the north is marked: EXCAVATION.",
         "exits": {"west": "security", "north": "excavationHatch"},
         "hotspots": [
@@ -306,11 +354,11 @@ _ROOMS_LEGACY = {
     },
     "labsDoor": {
         "id": "labsDoor",
-        "name": "Research Labs — Blast Door",
+        "name": "Research Labs ... Blast Door",
         "theme": "labsDoor",
         "mapPos": [2, 2],
         "mapFloor": 0,
-        "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols—and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
+        "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols... and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
         "desc": "A blast door blocks the Research Labs. A demonic seal has been painted over the keypad, like graffiti but with consequences.\n\nThe seal looks... unfinished.",
         "exits": {"south": "corridor", "north": "labs"},
         "rules": {"gateToNorthRequiresFlag": "brokeSeal"},
@@ -335,12 +383,12 @@ _ROOMS_LEGACY = {
     },
     "labs": {
         "id": "labs",
-        "name": "Research Labs — Argent Containment",
+        "name": "Research Labs ... Argent Containment",
         "theme": "labs",
         "mapPos": [3, 2],
         "mapFloor": 0,
-        "enterText": "The labs smell like antiseptic and sulfur—cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
-        "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur—like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
+        "enterText": "The labs smell like antiseptic and sulfur... cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
+        "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur... like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
         "exits": {"south": "labsDoor", "east": "templeLift"},
         "hotspots": [
             {"id": "toDoor", "name": "Blast Door", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -357,11 +405,11 @@ _ROOMS_LEGACY = {
     },
     "quarters": {
         "id": "quarters",
-        "name": "Living Quarters — Echoes of Payroll",
+        "name": "Living Quarters ... Echoes of Payroll",
         "theme": "quarters",
         "mapPos": [2, 3],
         "mapFloor": 0,
-        "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol—over and over—like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
+        "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol... over and over... like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
         "desc": "Bunks. Lockers. A poster about workplace safety that has been rewritten in blood. The intercom whispers static prayers.\n\nA cracked wall panel reveals a hidden recess.",
         "exits": {"west": "corridor", "east": "templeLift"},
         "hotspots": [
@@ -383,11 +431,11 @@ _ROOMS_LEGACY = {
     },
     "templeLift": {
         "id": "templeLift",
-        "name": "Service Lift — Down to the Ruins",
+        "name": "Service Lift ... Down to the Ruins",
         "theme": "lift",
         "mapPos": [3, 3],
         "mapFloor": 0,
-        "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nDOWN lands at the excavation hatch—the last UAC seal before the dig. The breach beyond is not a shortcut. It’s a bill.",
+        "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nDOWN lands at the excavation hatch... the last UAC seal before the dig. The breach beyond is not a shortcut. It’s a bill.",
         "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare; beneath you is the hatch room, not the pit itself.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
         "exits": {"west": "quarters", "east": "labs", "down": "excavationHatch"},
         "hotspots": [
@@ -398,12 +446,12 @@ _ROOMS_LEGACY = {
     },
     "excavationHatch": {
         "id": "excavationHatch",
-        "name": "Excavation Hatch — Sealed",
+        "name": "Excavation Hatch ... Sealed",
         "theme": "hatch",
         "mapPos": [2, 4],
         "mapFloor": -1,
-        "enterText": "The hatch is a boundary line—someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
-        "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nThe freight lift opens onto this landing—DOWN from the service deck, UP when you need to breathe facility air again.\n\nA biometric lock blinks an angry red.",
+        "enterText": "The hatch is a boundary line... someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
+        "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nThe freight lift opens onto this landing... DOWN from the service deck, UP when you need to breathe facility air again.\n\nA biometric lock blinks an angry red.",
         "exits": {"south": "maintenance", "north": "excavation", "up": "templeLift"},
         "rules": {"gateToNorthRequiresFlag": "openedHatch"},
         "hotspots": [
@@ -433,12 +481,12 @@ _ROOMS_LEGACY = {
     },
     "excavation": {
         "id": "excavation",
-        "name": "Excavation Site — Temple Breach",
+        "name": "Excavation Site ... Temple Breach",
         "theme": "excavation",
         "mapPos": [3, 4],
         "mapFloor": -1,
-        "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link—an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
-        "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nStone stairs climb north toward the hell-gate threshold—there is no other way up from the dig.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
+        "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link... an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
+        "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nStone stairs climb north toward the hell-gate threshold... there is no other way up from the dig.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
         "exits": {"south": "excavationHatch", "north": "hellGateAntechamber"},
         "hotspots": [
             {"id": "toHatch", "name": "Hatch", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -484,12 +532,12 @@ _ROOMS_LEGACY = {
     },
     "hellGateAntechamber": {
         "id": "hellGateAntechamber",
-        "name": "Hell-Gate Antechamber — The Threshold",
+        "name": "Hell-Gate Antechamber ... The Threshold",
         "theme": "antechamber",
         "mapPos": [4, 4],
         "mapFloor": -1,
-        "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out—it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
-        "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nSouth, the stone stairs return only to the excavation pit—the serpent threshold is never a lift ride away from the dig.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
+        "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out... it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
+        "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nSouth, the stone stairs return only to the excavation pit... the serpent threshold is never a lift ride away from the dig.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
         "exits": {"south": "excavation", "north": "hellGateChamber"},
         "rules": {"gateToNorthRequiresFlag": "unlockedGate"},
         "hotspots": [
@@ -512,11 +560,11 @@ _ROOMS_LEGACY = {
     },
     "armory": {
         "id": "armory",
-        "name": "Armory Annex — Old Toys",
+        "name": "Armory Annex ... Old Toys",
         "theme": "armory",
         "mapPos": [1, 4],
         "mapFloor": 0,
-        "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong—too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
+        "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong... too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
         "desc": "A small armory annex. Most racks are empty. A reinforced weapons locker sits behind a red-lit keypad. One display case remains intact, holding a demonic-metal key that pulses like a living bruise.\n\nThe case has a UAC warning label: DO NOT OPEN. As if that ever worked.",
         "exits": {"south": "security"},
         "hotspots": [
@@ -526,7 +574,7 @@ _ROOMS_LEGACY = {
         ],
         "objects": {
             "case": {
-                "look": "A sealed display case. The lock is simple—because the real lock is probably the curse.",
+                "look": "A sealed display case. The lock is simple... because the real lock is probably the curse.",
                 "open": {"requiresItem": "redKeycard", "onceFlag": "openedCase", "gain": ["serpentineKey"], "text": "You pop the case. Cold air spills out. You take the Serpentine Key. The warning label silently updates to: TOLD YOU."},
                 "use": {"death": "glassKills", "text": "You smash the glass with your elbow. The glass explodes outward and inward. Physics is also possessed."},
             },
@@ -539,12 +587,12 @@ _ROOMS_LEGACY = {
     },
     "hellGateChamber": {
         "id": "hellGateChamber",
-        "name": "Hell-Gate Chamber — The Crucible",
+        "name": "Hell-Gate Chamber ... The Crucible",
         "theme": "hellgate",
         "mapPos": [4, 3],
         "mapFloor": 1,
-        "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out—before the Titan decides you’re interesting.",
-        "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity—robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
+        "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out... before the Titan decides you’re interesting.",
+        "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity... robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
         "exits": {"south": "hellGateAntechamber"},
         "hotspots": [
             {"id": "toAnte", "name": "Antechamber", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -558,7 +606,7 @@ _ROOMS_LEGACY = {
                 "take": {"death": "riftTouch"},
                 "open": {"death": "riftTouch"},
                 "talk": {"death": "riftTouch"},
-                "close": {"death": "riftTouch"},
+                "whistle": {"death": "riftTouch"},
             },
             "crux": {
                 "look": "Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
@@ -567,7 +615,7 @@ _ROOMS_LEGACY = {
                     "options": [
                         {
                             "requiresItem": "soulCoreBreaker",
-                            "text": "You raise the Soul-Core Breaker. It screams—not in pain, but in joy. A beam of inverted helllight lances into the rift.\n\nThe Titan howls as reality clamps down like a jaw. Crux's fused form spasms, then is dragged backward, clawing at the air like a man trying to keep his job.\n\nA voice whispers: \"Seal achieved. Please evacuate. Or don't. I'm not your mother.\"",
+                            "text": "You raise the Soul-Core Breaker. It screams... not in pain, but in joy. A beam of inverted helllight lances into the rift.\n\nThe Titan howls as reality clamps down like a jaw. Crux's fused form spasms, then is dragged backward, clawing at the air like a man trying to keep his job.\n\nA voice whispers: \"Seal achieved. Please evacuate. Or don't. I'm not your mother.\"",
                             "setFlag": "gameWon",
                         }
                     ],
@@ -589,33 +637,12 @@ PROPS_DIR = resource_path("assets", "props")
 UI_DIR = resource_path("assets", "ui")
 TITLE_DIR = resource_path("assets", "title")
 MUSIC_DIR = resource_path("assets", "music")
-SFX_DIR = resource_path("assets", "sfx")
 # Preferred stems (any of these extensions: .png .jpg .jpeg .webp .bmp)
 TITLE_SCREEN_STEMS = ("crucible_facility", "crucible_exterior", "title", "title_screen")
-# Title menu music in assets/title/ — preferred names first (extensions: .wav .ogg .mp3)
+# Title menu music in assets/title/ ... preferred names first (extensions: .wav .ogg .mp3)
 TITLE_MUSIC_STEMS = ("title_menu", "menu", "title_music", "theme")
-# In-game looped music in assets/music/ — put **gameplay.wav** here (or .ogg/.mp3); see GAMEPLAY_MUSIC_STEMS order
+# In-game looped music in assets/music/ ... put **gameplay.wav** here (or .ogg/.mp3); see GAMEPLAY_MUSIC_STEMS order
 GAMEPLAY_MUSIC_STEMS = ("gameplay", "game", "ambient", "ingame")
-
-# One-shot voice line when the 4th Soul-Core Breaker piece is obtained.
-SOUL_CORE_PIECES = ("soulCoreFrame", "omegaCrystal", "neuralLink", "serpentineKey")
-SOUL_CORE_VOICE_FLAG = "heardAssembleSoulCoreBreaker"
-SOUL_CORE_VOICE_WAV = os.path.join(SFX_DIR, "assemble_soul_core_breaker.wav")
-_soul_core_voice_sound: Optional["pygame.mixer.Sound"] = None
-
-
-def _play_one_shot(path: str) -> None:
-    global _soul_core_voice_sound
-    try:
-        if pygame.mixer.get_init() is None:
-            return
-        if not os.path.isfile(path):
-            return
-        if _soul_core_voice_sound is None:
-            _soul_core_voice_sound = pygame.mixer.Sound(path)
-        _soul_core_voice_sound.play()
-    except Exception:
-        pass
 
 
 def resolve_title_music_path() -> Optional[str]:
@@ -713,7 +740,7 @@ def plasma_percent_bucket(fill01: float) -> int:
 
 
 def viewport_corner_meter_layout(viewport_rect: pygame.Rect) -> Tuple[Tuple[int, int, int], Tuple[int, int, int]]:
-    """(lx, ly, r) left plasma, (rx, ry, r) right face — hug bottom + outer edges of the room viewport (UI chrome)."""
+    """(lx, ly, r) left plasma, (rx, ry, r) right face ... hug bottom + outer edges of the room viewport (UI chrome)."""
     vw, vh = viewport_rect.w, viewport_rect.h
     r = int(min(vw, vh) * 0.15)
     r = clamp(r, 34, min(vw, vh) // 2 - 4)
@@ -951,7 +978,7 @@ def load_title_background_image() -> Optional[pygame.Surface]:
 
 
 def hotspot_show_overlay(hs: Dict[str, Any]) -> bool:
-    """Exits and barriers are usually already painted in room art—hitbox only. Optional per-hotspot override."""
+    """Exits and barriers are usually already painted in room art... hitbox only. Optional per-hotspot override."""
     if hs.get("showSprite") is True:
         return True
     if hs.get("showSprite") is False:
@@ -1000,7 +1027,11 @@ def wrap_text_lines(font: pygame.font.Font, text: str, max_width: int) -> List[s
 
 
 # Strip redundant facility subtitle; plasma orb shows drain in the viewport meter.
-_STATUS_FACILITY_SUFFIX = re.compile(r"\s*[—\-]\s*THE CRUCIBLE FACILITY\s*$", re.IGNORECASE)
+# Match " ... THE CRUCIBLE FACILITY" (current copy) or legacy em dash / hyphen before the subtitle.
+_STATUS_FACILITY_SUFFIX = re.compile(
+    r"(?:\s*[\u2014\-]\s*|\s+\.\.\.\s+)THE CRUCIBLE FACILITY\s*$",
+    re.IGNORECASE,
+)
 
 
 def room_name_for_status_bar(room_name: str) -> str:
@@ -1143,7 +1174,7 @@ def ui_resize_handles_try_begin(
 ) -> Optional[Dict[str, Any]]:
     """Hotspot-style hit test: corner scale, edge axis resize, interior move. Returns drag payload or None."""
     if not r.collidepoint(pos):
-        # allow grabbing resize handles that might extend — still inside rect in our layout
+        # allow grabbing resize handles that might extend ... still inside rect in our layout
         return None
     hsz = max(6, min(handle_px, r.w // 2, r.h // 2))
     handle = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
@@ -1585,7 +1616,8 @@ def sprite_pixel_icon(kind: str, obj_id: str, theme: str, px: int = 16, scale: i
     # Common palette
     steel = (50, 64, 58, 255)
     dark = (12, 16, 14, 255)
-    green = (25, 255, 106, 255)
+    # Bright green UI accent ... halved see-through vs prior 128 alpha (~75% opaque)
+    green = (25, 255, 106, 192)
     red = (255, 43, 43, 255)
     gold = (255, 211, 77, 255)
     bone = (180, 220, 200, 255)
@@ -1647,7 +1679,7 @@ def sprite_pixel_icon(kind: str, obj_id: str, theme: str, px: int = 16, scale: i
         p(px // 2, 3, gold)
     elif oid in {"ooze", "rift"} or k == "hazard":
         # slime / rift
-        col = (25, 255, 106, 255) if oid == "ooze" else red
+        col = green if oid == "ooze" else red
         for y in range(5, px - 5):
             for x in range(5, px - 5):
                 if (x - px // 2) ** 2 + (y - px // 2) ** 2 <= 25:
@@ -1725,15 +1757,7 @@ def die(state: Dict[str, Any], log: ScrollLog, text: str) -> None:
 def add_items(state: Dict[str, Any], items: List[str]) -> None:
     from doomgate.game import add_items as _a
 
-    # Trigger one-time voice line exactly when the 4th unique piece is obtained, any order.
-    have_before = sum(1 for it in SOUL_CORE_PIECES if it in state.get("inventory", []))
-    _a(state, items)
-    if get_flag(state, SOUL_CORE_VOICE_FLAG):
-        return
-    have_after = sum(1 for it in SOUL_CORE_PIECES if it in state.get("inventory", []))
-    if have_before < len(SOUL_CORE_PIECES) and have_after >= len(SOUL_CORE_PIECES):
-        set_flag(state, SOUL_CORE_VOICE_FLAG, True)
-        _play_one_shot(SOUL_CORE_VOICE_WAV)
+    _a(GAME, state, items)
 
 
 def remove_items(state: Dict[str, Any], items: List[str]) -> None:
@@ -1877,36 +1901,22 @@ def run() -> int:
         log.add(room_def(state["roomId"])["desc"])
         log_sys("Tip: SAVE often. Wrong choices can be terminal. (So can right ones, if you get cocky.)")
 
-    def save_game() -> None:
-        payload = json.dumps(state, indent=2)
-        from doomgate.util.paths import writable_path
+    def open_save_slots_popup(mode: str) -> None:
+        nonlocal active_save_slots_popup
+        active_save_slots_popup = {"mode": str(mode)}
 
-        path = writable_path(GAME["meta"]["saveFile"])
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(payload)
-        log_sys(f"Saved to {GAME['meta']['saveFile']}.")
+    def save_to_slot(slot: int) -> None:
+        fn = os.path.basename(write_slot(GAME, state, slot, writable_path))
+        log_sys(f"Saved to {fn}.")
 
-    def load_game() -> None:
+    def load_from_slot(slot: int) -> None:
         nonlocal inv_scroll_px
-        from doomgate.util.paths import writable_path
-
-        path = writable_path(GAME["meta"]["saveFile"])
-        if not os.path.exists(path):
-            log.add("No save found.", "warn")
+        if not load_slot_into_state(GAME, state, slot, writable_path):
+            log.add("Save data is corrupted or missing. (The file got possessed.)", "warn")
             return
-        try:
-            with open(path, "r", encoding="utf-8") as f:
-                loaded = json.load(f)
-            if not isinstance(loaded, dict):
-                raise ValueError("Bad save")
-            base = merge_loaded_save(GAME, loaded)
-            state.clear()
-            state.update(base)
-            inv_scroll_px = 0
-            log_sys("Loaded save.")
-            log.add(room_def(state["roomId"])["desc"])
-        except Exception:
-            log.add("Save data is corrupted. (The file got possessed.)", "warn")
+        inv_scroll_px = 0
+        log_sys("Loaded save.")
+        log.add(room_def(state["roomId"])["desc"])
 
     def restart() -> None:
         nonlocal title_screen, intro_done, inv_scroll_px
@@ -1919,10 +1929,11 @@ def run() -> int:
         title_screen = False
         intro_done = False
         item_popup_queue.clear()
-        nonlocal active_room_popup, active_manual_popup, active_linda_popup, hs_debug_drag, ui_layout_debug_drag
+        nonlocal active_room_popup, active_manual_popup, active_linda_popup, active_save_slots_popup, hs_debug_drag, ui_layout_debug_drag
         active_room_popup = None
         active_manual_popup = None
         active_linda_popup = None
+        active_save_slots_popup = None
         hs_debug_drag = None
         ui_layout_debug_drag = None
         inv_scroll_px = 0
@@ -1943,10 +1954,13 @@ def run() -> int:
 
     title_screen = True
     intro_done = False
+    title_menu_phase = "main"
+    title_hit: Dict[str, Any] = {}
     item_popup_queue: List[str] = []
     active_room_popup: Optional[Dict[str, Any]] = None
     active_manual_popup: Optional[Dict[str, Any]] = None
     active_linda_popup: Optional[Dict[str, Any]] = None
+    active_save_slots_popup: Optional[Dict[str, Any]] = None
     hs_debug_drag: Optional[Dict[str, Any]] = None
     inv_scroll_px = 0
     layout_state: Dict[str, Any] = {}
@@ -2027,10 +2041,11 @@ def run() -> int:
             pass
 
     def enter_game_from_title() -> None:
-        nonlocal title_screen, intro_done
+        nonlocal title_screen, intro_done, title_menu_phase
         stop_title_menu_music()
         start_gameplay_music()
         title_screen = False
+        title_menu_phase = "main"
         if not intro_done:
             intro()
             intro_done = True
@@ -2038,6 +2053,21 @@ def run() -> int:
             if not state.get("roomIntroShown", {}).get(state["roomId"], False) and room_def(state["roomId"]).get("enterText"):
                 state.setdefault("roomIntroShown", {})[state["roomId"]] = True
                 state["pendingRoomPopup"] = state["roomId"]
+
+    def enter_game_from_title_load_slot(slot: int) -> None:
+        nonlocal title_screen, intro_done, title_menu_phase, inv_scroll_px
+        if peek_slot(GAME, slot, writable_path) is None:
+            return
+        if not load_slot_into_state(GAME, state, slot, writable_path):
+            return
+        inv_scroll_px = 0
+        stop_title_menu_music()
+        start_gameplay_music()
+        title_screen = False
+        title_menu_phase = "main"
+        intro_done = True
+        log_sys("Loaded save.")
+        log.add(room_def(state["roomId"])["desc"])
 
     # Utility: minimap
     def draw_box(surf: pygame.Surface, r: pygame.Rect, title: str) -> None:
@@ -2095,7 +2125,7 @@ def run() -> int:
 
     def held_item_name() -> str:
         hid = state.get("heldItemId")
-        return item_def(hid)["name"] if hid else "—"
+        return item_def(hid)["name"] if hid else "... "
 
     def draw_held() -> None:
         held_rect = layout_state["held_rect"]
@@ -2118,42 +2148,89 @@ def run() -> int:
         draw_box(screen, inv_rect, "Inventory")
         items = state["inventory"]
         area = pygame.Rect(inv_rect.x + 10, inv_rect.y + 30, inv_rect.w - 20, inv_rect.h - 40)
-        cols_i = 3
-        bh = 28
-        row_stride = bh + 8
-        nrows = (len(items) + cols_i - 1) // cols_i if items else 0
-        content_h = nrows * row_stride - 8 if nrows > 0 else 0
+        pad_x = 8
+        pad_y = 6
+        gap = 8
+        line_h = max(12, int(font_small.get_height()))
+        min_bubble_h = 28
+        scroll_track = 6
+
+        def flow_pack(usable_row_w: int) -> Tuple[List[List[Tuple[str, List[str], int, int]]], int]:
+            """Pack items into rows; each bubble is only as wide as its text (up to usable_row_w)."""
+            max_text_wrap = max(24, usable_row_w - 2 * pad_x)
+            packed: List[List[Tuple[str, List[str], int, int]]] = []
+            row: List[Tuple[str, List[str], int, int]] = []
+            row_used = 0
+            for iid in items:
+                name = item_def(iid)["name"]
+                lines_loc = _wrap_ui_text(font_small, name, max_text_wrap)
+                text_w = max((font_small.size(ln)[0] for ln in lines_loc), default=0)
+                bw = min(usable_row_w, text_w + 2 * pad_x)
+                bh = max(min_bubble_h, len(lines_loc) * line_h + 2 * pad_y)
+                need = bw if not row else gap + bw
+                if row and row_used + need > usable_row_w:
+                    packed.append(row)
+                    row = []
+                    row_used = 0
+                    need = bw
+                row.append((iid, lines_loc, bw, bh))
+                row_used += need
+            if row:
+                packed.append(row)
+            total_h = 0
+            for r in packed:
+                rh = max(h for (_, _, _, h) in r)
+                total_h += rh + gap
+            if packed:
+                total_h -= gap
+            return packed, total_h
+
+        usable_w = area.w
+        rows: List[List[Tuple[str, List[str], int, int]]] = []
+        content_h = 0
+        for _ in range(5):
+            rows, content_h = flow_pack(usable_w)
+            need_scroll = content_h > area.h
+            next_w = area.w - (scroll_track if need_scroll else 0)
+            if next_w == usable_w:
+                break
+            usable_w = next_w
         max_scroll = max(0, content_h - area.h)
         inv_scroll_px = clamp(int(inv_scroll_px), 0, max_scroll)
-        inner_w = area.w - (10 if max_scroll > 0 else 0)
-        bw = (inner_w - 8 * (cols_i - 1)) // cols_i
 
         old_clip = screen.get_clip()
         screen.set_clip(area)
         try:
-            for idx, iid in enumerate(items):
-                r = idx // cols_i
-                c = idx % cols_i
-                row_y = area.y + r * row_stride - inv_scroll_px
-                rect = pygame.Rect(area.x + c * (bw + 8), row_y, bw, bh)
-                inv_buttons.append((iid, rect))
-                if not rect.colliderect(area):
-                    continue
-                selected = state.get("heldItemId") == iid
-                bg = (18, 34, 26) if selected else (10, 14, 12)
-                border = colors["accent"] if selected else colors["border"]
-                pygame.draw.rect(screen, bg, rect, border_radius=8)
-                pygame.draw.rect(screen, border, rect, 1, border_radius=8)
-                screen.blit(
-                    font_small.render(item_def(iid)["name"][:18], True, colors["text"]),
-                    (rect.x + 8, rect.y + 6),
-                )
+            y_base = area.y - inv_scroll_px
+            y_cursor = y_base
+            for row in rows:
+                row_h = max(h for (_, _, _, h) in row)
+                x_cursor = area.x
+                for iid, lines_loc, bw, bh in row:
+                    y_off = (row_h - bh) // 2
+                    rect = pygame.Rect(x_cursor, y_cursor + y_off, bw, bh)
+                    inv_buttons.append((iid, rect))
+                    if rect.colliderect(area):
+                        selected = state.get("heldItemId") == iid
+                        bg = (18, 34, 26) if selected else (10, 14, 12)
+                        border = colors["accent"] if selected else colors["border"]
+                        pygame.draw.rect(screen, bg, rect, border_radius=8)
+                        pygame.draw.rect(screen, border, rect, 1, border_radius=8)
+                        ly = rect.y + pad_y
+                        for ln in lines_loc:
+                            screen.blit(
+                                font_small.render(ln, True, colors["text"]),
+                                (rect.x + pad_x, ly),
+                            )
+                            ly += line_h
+                    x_cursor += bw + gap
+                y_cursor += row_h + gap
             if not items:
                 screen.blit(font_small.render("(empty)", True, colors["muted"]), (area.x, area.y))
         finally:
             screen.set_clip(old_clip)
         if max_scroll > 0:
-            track = pygame.Rect(area.right - 5, area.y, 4, area.h)
+            track = pygame.Rect(area.right - scroll_track, area.y, 4, area.h)
             pygame.draw.rect(screen, (30, 44, 38), track, border_radius=2)
             thumb_h = max(12, int(area.h * min(1.0, area.h / float(max(content_h, 1)))))
             prog = inv_scroll_px / float(max_scroll)
@@ -2533,18 +2610,18 @@ def run() -> int:
     def do_hotspot_click(hs: Dict[str, Any]) -> None:
         cmd = current_cmd()
         if cmd == "save":
-            save_game()
+            open_save_slots_popup("save")
             return
         if cmd == "load":
-            load_game()
+            open_save_slots_popup("load")
             return
         if not state["alive"]:
             log.add("You're dead. The facility requires you to stop being dead first. (Restart or Load.)", "warn")
             return
         if hs["kind"] == "exit":
             if cmd != "use":
-                log.add("Select USE, then click the door or passage to go through. No free movement—this is an adventure game.", "warn")
-                apply_action(state, "interact", log)
+                log.add("Select USE, then click the door or passage to go through. No free movement... this is an adventure game.", "warn")
+                apply_action(state, "look" if cmd in {"look", "whistle"} else "interact", log)
                 return
             move(state, log, hs["data"]["dir"])
             return
@@ -2651,6 +2728,87 @@ def run() -> int:
         prompt = font_small.render(hint, True, colors["warn"])
         screen.blit(prompt, prompt.get_rect(center=(panel.centerx, panel.bottom - 22)))
 
+    def save_slots_modal_layout(W: int, H: int) -> Tuple[pygame.Rect, pygame.Rect, List[pygame.Rect]]:
+        panel_w = min(560, W - 48)
+        panel_h = min(340, H - 48)
+        panel = pygame.Rect((W - panel_w) // 2, (H - panel_h) // 2, panel_w, panel_h)
+        inner_top = panel.y + 44
+        inner_bottom = panel.bottom - 48
+        gap = 8
+        avail_h = max(0, inner_bottom - inner_top)
+        slot_h = max(54, min(76, (avail_h - 2 * gap) // 3))
+        slot_rects: List[pygame.Rect] = []
+        for i in range(3):
+            y = inner_top + i * (slot_h + gap)
+            slot_rects.append(pygame.Rect(panel.x + 16, y, panel.w - 32, slot_h))
+        cancel = pygame.Rect(panel.centerx - 56, panel.bottom - 38, 112, 28)
+        return panel, cancel, slot_rects
+
+    def draw_save_slots_modal(
+        mode: str,
+        summaries: List[Optional[Dict[str, Any]]],
+        footer_hint: str,
+    ) -> Tuple[pygame.Rect, pygame.Rect, List[pygame.Rect]]:
+        """Terminal-style overlay; returns (panel_rect, cancel_rect, slot_rects)."""
+        W, H = screen.get_size()
+        overlay = pygame.Surface((W, H), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 130))
+        screen.blit(overlay, (0, 0))
+
+        panel, cancel, slot_rects = save_slots_modal_layout(W, H)
+        pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
+
+        hdr = "UAC ... SAVE SLOT" if mode == "save" else "UAC ... LOAD GAME"
+        screen.blit(font_mono.render(hdr, True, colors["accent"]), (panel.x + 18, panel.y + 14))
+
+        for i, sr in enumerate(slot_rects):
+            meta = summaries[i]
+            occupied = meta is not None
+
+            if mode == "load" and not occupied:
+                bg = (14, 18, 16)
+                border_c = (45, 62, 54)
+                txt_col = colors["muted"]
+                line1 = f"SLOT {i + 1} ... (empty)"
+                line2 = ""
+            elif mode == "save" and not occupied:
+                bg = (12, 22, 18)
+                border_c = colors["accent_dim"]
+                txt_col = colors["text"]
+                line1 = f"SLOT {i + 1} ... EMPTY"
+                line2 = "Click to save new game here"
+            else:
+                bg = (10, 26, 18)
+                border_c = colors["accent"]
+                txt_col = colors["accent"]
+                assert meta is not None
+                rn = str(meta.get("roomName", "?"))
+                act = int(meta.get("actions", 0))
+                alive = bool(meta.get("alive", True))
+                st = "ACTIVE" if alive else "DECEASED"
+                line1 = f"SLOT {i + 1} ... {rn.upper()}"
+                line2 = f"{act} actions · {st}"
+                if mode == "save":
+                    line2 += " · click to overwrite"
+                else:
+                    line2 += " · click to load"
+
+            pygame.draw.rect(screen, bg, sr, border_radius=8)
+            pygame.draw.rect(screen, border_c, sr, width=1, border_radius=8)
+            screen.blit(font_mono.render(line1[:72], True, txt_col), (sr.x + 10, sr.y + 10))
+            if line2:
+                screen.blit(font_small.render(line2[:96], True, colors["muted"]), (sr.x + 10, sr.y + 30))
+
+        pygame.draw.rect(screen, colors["cmd_bg"], cancel, border_radius=6)
+        pygame.draw.rect(screen, colors["border"], cancel, width=1, border_radius=6)
+        cx = font_small.render("BACK", True, colors["warn"])
+        screen.blit(cx, cx.get_rect(center=cancel.center))
+
+        screen.blit(font_small.render(footer_hint, True, colors["muted"]), (panel.x + 18, panel.bottom - 22))
+
+        return panel, cancel, slot_rects
+
     def draw_room_intro_popup(popup: Dict[str, Any]) -> None:
         W, H = screen.get_size()
         overlay = pygame.Surface((W, H), pygame.SRCALPHA)
@@ -2670,7 +2828,7 @@ def run() -> int:
         pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
 
         if is_victory:
-            title_s = font_mono.render("UAC — CRUCIBLE FACILITY // PRIORITY BROADCAST", True, colors["accent"])
+            title_s = font_mono.render("UAC ... CRUCIBLE FACILITY // PRIORITY BROADCAST", True, colors["accent"])
         else:
             room_id = popup["roomId"]
             title = room_def(room_id).get("name", room_id).upper()
@@ -2741,7 +2899,7 @@ def run() -> int:
         pygame.draw.rect(screen, (0, 0, 0), panel, border_radius=10)
         pygame.draw.rect(screen, colors["accent"], panel, width=2, border_radius=10)
 
-        title_s = font_mono.render("L.I.N.D.A. — ACCESS", True, colors["accent"])
+        title_s = font_mono.render("L.I.N.D.A. ... ACCESS", True, colors["accent"])
         screen.blit(title_s, (panel.x + 18, panel.y + 14))
 
         inner = pygame.Rect(panel.x + 16, panel.y + 44, panel.w - 32, panel.h - 96)
@@ -2763,7 +2921,7 @@ def run() -> int:
             blink = (pygame.time.get_ticks() // 520) % 2
             prompt_line = "> " + inp + ("█" if blink else "")
             screen.blit(body_font.render(prompt_line, True, colors["warn"]), (inner.x + 2, inner.bottom - 44))
-            hint = font_small.render("ENTER — submit   ESC / Q — close (Q if code field empty)", True, colors["muted"])
+            hint = font_small.render("ENTER ... submit   ESC / Q ... close (Q if code field empty)", True, colors["muted"])
             screen.blit(hint, (panel.x + 18, panel.bottom - 26))
 
     def launch_rbyt3r_minigame() -> None:
@@ -2882,6 +3040,8 @@ def run() -> int:
     title_bg_cached = load_title_background_image()
 
     def draw_title_scr() -> None:
+        nonlocal title_hit
+        title_hit.clear()
         W, H = screen.get_size()
         src = get_title_screen_image()
         if src is not None:
@@ -2892,15 +3052,18 @@ def run() -> int:
         rows: List[Tuple[pygame.font.Font, str, Tuple[int, int, int]]] = [
             (title_fbig, "DOOMGATE", (240, 255, 245)),
             (title_fmed, "THE WARLOCK'S CRUCIBLE", (210, 235, 220)),
-            (title_fmed, "Press Any Key to RIP AND TEAR!", colors["warn"]),
-            (font_small, "Mouse click also works · ESC quits", (200, 220, 210)),
+            (font_small, "N / Enter ... New Game   ·   L ... Load Game   ·   ESC ... Quit", (200, 220, 210)),
         ]
         rendered = [f.render(t, True, c) for f, t, c in rows]
-        gaps = (10, 16, 14)
-        pad_x, pad_y = 36, 30
+        gaps = (10, 16)
+        btn_h = 38
+        btn_gap = 12
+        pad_x, pad_y = 36, 28
         max_line_w = max(s.get_width() for s in rendered)
-        total_h = pad_y * 2 + sum(s.get_height() for s in rendered) + sum(gaps)
-        total_w = max_line_w + pad_x * 2
+        btn_row_w = max(max_line_w, 340)
+        total_w = btn_row_w + pad_x * 2
+        text_h = sum(s.get_height() for s in rendered) + sum(gaps)
+        total_h = pad_y * 2 + text_h + btn_gap + btn_h + 8
         px = (W - total_w) // 2
         py = (H - total_h) // 2
 
@@ -2916,6 +3079,31 @@ def run() -> int:
             screen.blit(surf, (x, y))
             if i < len(gaps):
                 y += surf.get_height() + gaps[i]
+
+        bw = (total_w - pad_x * 2 - 12) // 2
+        bx0 = px + pad_x
+        bx1 = bx0 + bw + 12
+        btn_y = y + btn_gap
+        new_r = pygame.Rect(bx0, btn_y, bw, btn_h)
+        load_r = pygame.Rect(bx1, btn_y, bw, btn_h)
+        title_hit["new_game"] = new_r
+        title_hit["load_game"] = load_r
+        pygame.draw.rect(screen, colors["cmd_active_bg"], new_r, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], new_r, width=1, border_radius=10)
+        pygame.draw.rect(screen, colors["cmd_bg"], load_r, border_radius=10)
+        pygame.draw.rect(screen, colors["accent"], load_r, width=1, border_radius=10)
+        t_new = font_small.render("NEW GAME", True, colors["text"])
+        t_load = font_small.render("LOAD GAME", True, colors["text"])
+        screen.blit(t_new, t_new.get_rect(center=new_r.center))
+        screen.blit(t_load, t_load.get_rect(center=load_r.center))
+
+        if title_menu_phase == "pick_load":
+            sums = [peek_slot(GAME, i, writable_path) for i in range(3)]
+            _, cancel_r, slot_rects = draw_save_slots_modal(
+                "load", sums, "ESC ... back to title · keys 1-3 load"
+            )
+            title_hit["cancel_rect"] = cancel_r
+            title_hit["slot_rects"] = slot_rects
 
     # Background cache per room (prefer external art) + per theme fallback
     bg_cache: Dict[Tuple[str, int, int], pygame.Surface] = {}
@@ -2980,6 +3168,7 @@ def run() -> int:
         # Victory outro (terminal popup + later fade)
         if (
             active_room_popup is None
+            and active_save_slots_popup is None
             and active_manual_popup is None
             and not title_screen
             and not item_popup_queue
@@ -3000,6 +3189,7 @@ def run() -> int:
         # Activate pending room popup (first-visit flavor text)
         if (
             active_room_popup is None
+            and active_save_slots_popup is None
             and active_manual_popup is None
             and not title_screen
             and not item_popup_queue
@@ -3015,6 +3205,7 @@ def run() -> int:
             active_linda_popup is None
             and state.get("pendingLindaTerminal")
             and not title_screen
+            and active_save_slots_popup is None
             and active_manual_popup is None
             and active_room_popup is None
             and not item_popup_queue
@@ -3080,12 +3271,16 @@ def run() -> int:
                         pygame.key.stop_text_input()
                     except Exception:
                         pass
+                elif active_save_slots_popup is not None:
+                    active_save_slots_popup = None
                 elif active_room_popup is not None:
                     dismiss_active_room_popup()
                 elif active_manual_popup is not None:
                     active_manual_popup = None
                 elif item_popup_queue:
                     item_popup_queue.pop(0)
+                elif title_screen and title_menu_phase == "pick_load":
+                    title_menu_phase = "main"
                 else:
                     running = False
             elif (
@@ -3094,6 +3289,7 @@ def run() -> int:
                 and victory_fade_alpha > 45
                 and active_room_popup is None
                 and active_linda_popup is None
+                and active_save_slots_popup is None
                 and active_manual_popup is None
                 and not item_popup_queue
             ):
@@ -3133,6 +3329,41 @@ def run() -> int:
                                 pass
                 else:
                     pass
+            elif active_save_slots_popup is not None:
+                mode = str(active_save_slots_popup.get("mode", "save"))
+                W, H = screen.get_size()
+                _panel, cancel_r, slot_rects = save_slots_modal_layout(W, H)
+                if event.type == pygame.KEYDOWN:
+                    if event.key in (pygame.K_1, pygame.K_KP1):
+                        slot_i = 0
+                    elif event.key in (pygame.K_2, pygame.K_KP2):
+                        slot_i = 1
+                    elif event.key in (pygame.K_3, pygame.K_KP3):
+                        slot_i = 2
+                    else:
+                        slot_i = -1
+                    if slot_i >= 0:
+                        if mode == "save":
+                            save_to_slot(slot_i)
+                            active_save_slots_popup = None
+                        elif peek_slot(GAME, slot_i, writable_path):
+                            load_from_slot(slot_i)
+                            active_save_slots_popup = None
+                elif event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                    if cancel_r.collidepoint(event.pos):
+                        active_save_slots_popup = None
+                    else:
+                        for slot_i, sr in enumerate(slot_rects):
+                            if sr.collidepoint(event.pos):
+                                if mode == "save":
+                                    save_to_slot(slot_i)
+                                    active_save_slots_popup = None
+                                elif peek_slot(GAME, slot_i, writable_path):
+                                    load_from_slot(slot_i)
+                                    active_save_slots_popup = None
+                                break
+                else:
+                    pass
             elif active_room_popup is not None:
                 # While visible: swallow all input so the room can't be interacted with.
                 if event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
@@ -3165,16 +3396,42 @@ def run() -> int:
                     active_manual_popup = None
                 else:
                     pass
+            elif title_screen:
+                if title_menu_phase == "pick_load":
+                    W, H = screen.get_size()
+                    _panel, cancel_r, slot_rects = save_slots_modal_layout(W, H)
+                    if event.type == pygame.KEYDOWN:
+                        if event.key in (pygame.K_1, pygame.K_KP1):
+                            enter_game_from_title_load_slot(0)
+                        elif event.key in (pygame.K_2, pygame.K_KP2):
+                            enter_game_from_title_load_slot(1)
+                        elif event.key in (pygame.K_3, pygame.K_KP3):
+                            enter_game_from_title_load_slot(2)
+                    elif event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1:
+                        if cancel_r.collidepoint(event.pos):
+                            title_menu_phase = "main"
+                        else:
+                            for slot_i, sr in enumerate(slot_rects):
+                                if sr.collidepoint(event.pos) and peek_slot(GAME, slot_i, writable_path):
+                                    enter_game_from_title_load_slot(slot_i)
+                                    break
+                elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                    if title_hit.get("load_game") and title_hit["load_game"].collidepoint(event.pos):
+                        title_menu_phase = "pick_load"
+                    elif title_hit.get("new_game") and title_hit["new_game"].collidepoint(event.pos):
+                        enter_game_from_title()
+                    else:
+                        enter_game_from_title()
+                elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
+                    if event.key in (pygame.K_l, pygame.K_L):
+                        title_menu_phase = "pick_load"
+                    elif event.key not in (pygame.K_n, pygame.K_N):
+                        enter_game_from_title()
             elif item_popup_queue:
                 if event.type == pygame.KEYDOWN or (
                     event.type == pygame.MOUSEBUTTONDOWN and getattr(event, "button", 0) == 1
                 ):
                     item_popup_queue.pop(0)
-            elif title_screen:
-                if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                    enter_game_from_title()
-                elif event.type == pygame.KEYDOWN and event.key != pygame.K_ESCAPE:
-                    enter_game_from_title()
             elif event.type == pygame.MOUSEWHEEL:
                 inv_r = layout_state.get("inv_rect")
                 if (
@@ -3183,6 +3440,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                     and active_manual_popup is None
                     and not item_popup_queue
                 ):
@@ -3206,6 +3464,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                     and active_manual_popup is None
                     and not item_popup_queue
                 ):
@@ -3217,6 +3476,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                     and active_manual_popup is None
                     and not item_popup_queue
                 ):
@@ -3229,6 +3489,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                 ):
                     ui_layout_debug_end_drag()
                 elif (
@@ -3236,6 +3497,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                 ):
                     hs_debug_end_drag()
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -3244,6 +3506,7 @@ def run() -> int:
                     and not title_screen
                     and active_room_popup is None
                     and active_linda_popup is None
+                    and active_save_slots_popup is None
                     and active_manual_popup is None
                     and not item_popup_queue
                     and ui_layout_debug_try_begin(event.pos)
@@ -3252,10 +3515,10 @@ def run() -> int:
                 for b in cmd_buttons:
                     if b.rect.collidepoint(event.pos):
                         if b.value == "save":
-                            save_game()
+                            open_save_slots_popup("save")
                             apply_action(state, "system", log)
                         elif b.value == "load":
-                            load_game()
+                            open_save_slots_popup("load")
                             apply_action(state, "system", log)
                         else:
                             set_cmd(b.value, cmd_buttons)
@@ -3332,7 +3595,7 @@ def run() -> int:
                         continue
 
                     if viewport_rect.collidepoint(event.pos):
-                        # Plasma orb refill: HOLD Plasma Lantern Charger + USE on orb meter.
+                        # Plasma orb refill: HOLD Plasma Charger + USE on orb meter.
                         if (
                             not debug_hotspots
                             and state.get("alive")
@@ -3367,6 +3630,7 @@ def run() -> int:
                             and not title_screen
                             and active_room_popup is None
                             and active_linda_popup is None
+                            and active_save_slots_popup is None
                             and active_manual_popup is None
                             and not item_popup_queue
                             and hs_debug_try_begin(event.pos)
@@ -3386,6 +3650,7 @@ def run() -> int:
                     and not item_popup_queue
                     and active_room_popup is None
                     and active_manual_popup is None
+                    and active_save_slots_popup is None
                     and active_linda_popup is None
                 ):
                     if not HOTSPOT_DEBUG_F3_FOR_EVERYONE and not state.get("hotspotDebugUnlocked"):
@@ -3401,6 +3666,7 @@ def run() -> int:
                     and not item_popup_queue
                     and active_room_popup is None
                     and active_manual_popup is None
+                    and active_save_slots_popup is None
                     and active_linda_popup is None
                 ):
                     ok, msg = save_hotspot_layout_to_disk(GAME)
@@ -3414,6 +3680,7 @@ def run() -> int:
                     and not item_popup_queue
                     and active_room_popup is None
                     and active_manual_popup is None
+                    and active_save_slots_popup is None
                     and active_linda_popup is None
                 ):
                     if not UI_LAYOUT_DEBUG_F5_FOR_EVERYONE and not state.get("uiLayoutDebugUnlocked"):
@@ -3422,7 +3689,7 @@ def run() -> int:
                         debug_ui_layout = not debug_ui_layout
                         if debug_ui_layout:
                             log_sys(
-                                "UI layout: tinted panels + viewport HUD (plasma orb, portrait) — drag to move, "
+                                "UI layout: tinted panels + viewport HUD (plasma orb, portrait) ... drag to move, "
                                 "corner = scale, edges = resize. F6 saves ui_layout.json (panels + HUD offsets)."
                             )
                         else:
@@ -3434,6 +3701,7 @@ def run() -> int:
                     and not item_popup_queue
                     and active_room_popup is None
                     and active_manual_popup is None
+                    and active_save_slots_popup is None
                     and active_linda_popup is None
                 ):
                     sync_ui_layout_overrides_from_lay(layout_state, ui_layout_ov)
@@ -3510,10 +3778,25 @@ def run() -> int:
                 screen.blit(spr, spr.get_rect(center=r.center))
 
             if debug_hotspots:
-                dbg = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
-                dbg.fill((25, 255, 106, 40))
-                screen.blit(dbg, r.topleft)
-                pygame.draw.rect(screen, colors["accent"], r, width=1, border_radius=4)
+                # Soft light-gray glow over the hitbox (not a solid green tile); sits above room + sprite.
+                _gx = max(1, r.w + 14)
+                _gy = max(1, r.h + 14)
+                glow = pygame.Surface((_gx, _gy), pygame.SRCALPHA)
+                _ox, _oy = 7, 7
+                br_o = min(12, _gx // 4, _gy // 4)
+                br_i = min(8, r.w // 3, r.h // 3)
+                pygame.draw.rect(glow, (232, 234, 238, 48), glow.get_rect(), border_radius=br_o)
+                pygame.draw.rect(
+                    glow,
+                    (244, 245, 247, 38),
+                    pygame.Rect(_ox, _oy, r.w, r.h),
+                    border_radius=br_i,
+                )
+                screen.blit(glow, (r.x - _ox, r.y - _oy))
+                rim = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+                pygame.draw.rect(rim, (0, 0, 0, 0), rim.get_rect())
+                pygame.draw.rect(rim, (170, 176, 184, 160), rim.get_rect(), width=1, border_radius=min(6, r.w // 2, r.h // 2))
+                screen.blit(rim, r.topleft)
                 hsz = max(6, min(HS_DEBUG_HANDLE_PX, r.w // 2, r.h // 2))
                 h_r = pygame.Rect(r.right - hsz, r.bottom - hsz, hsz, hsz)
                 pygame.draw.rect(screen, (255, 255, 220), h_r, width=2, border_radius=2)
@@ -3532,9 +3815,22 @@ def run() -> int:
             hover = r.collidepoint((mx, my)) and viewport_rect.collidepoint((mx, my))
             if hover:
                 hovering_hotspot = hs["name"]
-            if hover:
-                pygame.draw.rect(screen, colors["hotspot_hover"], r, border_radius=6)
-                pygame.draw.rect(screen, colors["hotspot_border"], r, 1, border_radius=6)
+                # pygame.draw ignores alpha on the main framebuffer ... must blit SRCALPHA surfaces.
+                _pad = 8
+                _bw = max(1, r.w + _pad * 2)
+                _bh = max(1, r.h + _pad * 2)
+                _outer = pygame.Surface((_bw, _bh), pygame.SRCALPHA)
+                _br_o = min(12, _bw // 4, _bh // 4)
+                pygame.draw.rect(_outer, (20, 200, 88, 45), _outer.get_rect(), border_radius=_br_o)
+                screen.blit(_outer, (r.x - _pad, r.y - _pad))
+                _inner = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+                _br_i = min(6, max(2, r.w // 4), max(2, r.h // 4))
+                pygame.draw.rect(_inner, (25, 255, 106, 100), _inner.get_rect(), border_radius=_br_i)
+                screen.blit(_inner, r.topleft)
+                _edge = pygame.Surface((r.w, r.h), pygame.SRCALPHA)
+                pygame.draw.rect(_edge, (0, 0, 0, 0), _edge.get_rect())
+                pygame.draw.rect(_edge, (25, 255, 106, 200), _edge.get_rect(), width=2, border_radius=_br_i)
+                screen.blit(_edge, r.topleft)
 
         (meter_lx, meter_ly, meter_r), (meter_rx, meter_ry, meter_rr), _, _ = apply_hud_corner_meter_layout(
             viewport_rect, ui_layout_ov
@@ -3557,7 +3853,7 @@ def run() -> int:
             pygame.time.get_ticks(),
         )
         if hovering_hotspot:
-            # Strip between the two HUD orbs (order-independent — works if plasma/portrait are swapped).
+            # Strip between the two HUD orbs (order-independent ... works if plasma/portrait are swapped).
             p_left, p_right = meter_lx - meter_r, meter_lx + meter_r
             f_left, f_right = meter_rx - meter_rr, meter_rx + meter_rr
             (lo_l, lo_r), (hi_l, hi_r) = sorted([(p_left, p_right), (f_left, f_right)], key=lambda x: x[0])
@@ -3630,6 +3926,10 @@ def run() -> int:
             draw_linda_popup(active_linda_popup)
         if active_manual_popup is not None:
             draw_manual_popup(active_manual_popup)
+        if active_save_slots_popup is not None:
+            sm = str(active_save_slots_popup.get("mode", "save"))
+            sums = [peek_slot(GAME, i, writable_path) for i in range(3)]
+            draw_save_slots_modal(sm, sums, "ESC ... close · keys 1-3")
 
         if victory_fade_active and not title_screen and victory_fade_alpha > 0:
             vw, vh = screen.get_size()
@@ -3638,7 +3938,7 @@ def run() -> int:
             veil.fill((0, 0, 0, a))
             screen.blit(veil, (0, 0))
             if a >= 185:
-                h1 = font_small.render("RESTART — lower right · ESC quits", True, (218, 226, 220))
+                h1 = font_small.render("RESTART ... lower right · ESC quits", True, (218, 226, 220))
                 screen.blit(h1, h1.get_rect(midbottom=(vw // 2, vh - 28)))
 
         pygame.display.flip()

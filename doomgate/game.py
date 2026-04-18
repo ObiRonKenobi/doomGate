@@ -1,6 +1,13 @@
 from __future__ import annotations
 
+import os
 from typing import Any, Dict, List, Optional, Protocol
+
+
+# Pieces needed before Soul-Core Breaker assembly; used for inventory voice cue.
+_SOUL_CORE_PIECES = ("soulCoreFrame", "omegaCrystal", "neuralLink", "serpentineKey")
+_SOUL_CORE_VOICE_FLAG = "heardAssembleSoulCoreBreaker"
+_soul_core_voice_sound = None  # pygame.mixer.Sound cache
 
 
 class LogLike(Protocol):
@@ -16,7 +23,7 @@ def default_state(game: Dict[str, Any]) -> Dict[str, Any]:
     ap = int(game["meta"]["actionsPerLantern"])
     return {
         "roomId": "hangar",
-        "inventory": ["plasmaCharger"],
+        "inventory": [],
         "heldItemId": None,
         "cmd": "look",
         "flags": {},
@@ -42,6 +49,8 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     """Merge a JSON-loaded dict onto defaults and normalize plasma/charger fields."""
     base = default_state(game)
     base.update(loaded)
+    if base.get("cmd") == "close":
+        base["cmd"] = "whistle"
     base.setdefault("flags", {})
     base.setdefault("seenRooms", {})
     base.setdefault("roomIntroShown", {})
@@ -53,8 +62,6 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     base.setdefault("hotspotDebugUnlocked", False)
     base.setdefault("portraitExcitedUntil", 0)
     base.setdefault("inventory", [])
-    if "plasmaCharger" not in base["inventory"]:
-        base["inventory"].insert(0, "plasmaCharger")
 
     ap = int(game["meta"]["actionsPerLantern"])
     mx = int(game["meta"]["lanternMaxCarry"])
@@ -67,6 +74,7 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
         seg = int(base.get("actions", 0)) % max(ap, 1)
         base["plasma"] = ap if seg == 0 else max(0, ap - seg)
     base["plasma"] = clamp_int(int(base.get("plasma", ap)), 0, max(ap, 1))
+    sort_inventory(game, base)
     return base
 
 
@@ -100,6 +108,9 @@ def enable_god_mode(game: Dict[str, Any], state: Dict[str, Any], log: LogLike) -
     for iid in game["items"].keys():
         if iid not in state["inventory"]:
             state["inventory"].append(iid)
+    sort_inventory(game, state)
+    # Cheat gives all items; play assemble line immediately (does not use add_items).
+    _emit_soul_core_voice()
     state.setdefault("seenRooms", {})
     for rid in game["rooms"].keys():
         state["seenRooms"][rid] = True
@@ -118,9 +129,14 @@ def announce_victory_if_won(state: Dict[str, Any], log: LogLike) -> None:
 
 
 def action_cost(kind: str) -> int:
-    if kind in {"inventory", "system"}:
+    if kind in {"inventory", "system", "look"}:
         return 0
     return 1
+
+
+def apply_object_interaction_cost(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, cmd: str) -> None:
+    """Spend plasma for hotspot/object interactions; LOOK and WHISTLE do not drain the orb."""
+    apply_action(game, state, "look" if cmd in {"look", "whistle"} else "interact", log)
 
 
 def die(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, text: str) -> None:
@@ -128,7 +144,7 @@ def die(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, text: str) ->
         return
     if state.get("godMode"):
         log.add(text, "dead")
-        log.add("(God mode — you're still here. That was for show.)", "sys")
+        log.add("(God mode ... you're still here. That was for show.)", "sys")
         return
     state["alive"] = False
     log.add(text, "dead")
@@ -152,10 +168,50 @@ def apply_action(game: Dict[str, Any], state: Dict[str, Any], kind: str, log: Lo
         die(game, state, log, game["deaths"]["darkness"])
 
 
-def add_items(state: Dict[str, Any], items: List[str]) -> None:
+def sort_inventory(game: Dict[str, Any], state: Dict[str, Any]) -> None:
+    """Alphabetical by display name, then item id."""
+    inv = state.get("inventory")
+    if not inv:
+        return
+    inv.sort(key=lambda iid: (item_def(game, iid)["name"].lower(), iid.lower()))
+
+
+def _emit_soul_core_voice() -> None:
+    """Play the assemble Soul-Core voice line if mixer/file are available."""
+    try:
+        import pygame
+        from doomgate.util.paths import resource_path
+
+        global _soul_core_voice_sound
+        p = resource_path("assets", "sfx", "assemble_soul_core_breaker.wav")
+        if not os.path.isfile(p):
+            return
+        if pygame.mixer.get_init() is None:
+            return
+        if _soul_core_voice_sound is None:
+            _soul_core_voice_sound = pygame.mixer.Sound(p)
+        _soul_core_voice_sound.play()
+    except Exception:
+        pass
+
+
+def _maybe_play_soul_core_voice(state: Dict[str, Any], have_before: int, have_after: int) -> None:
+    if get_flag(state, _SOUL_CORE_VOICE_FLAG):
+        return
+    if have_before >= len(_SOUL_CORE_PIECES) or have_after < len(_SOUL_CORE_PIECES):
+        return
+    set_flag(state, _SOUL_CORE_VOICE_FLAG, True)
+    _emit_soul_core_voice()
+
+
+def add_items(game: Dict[str, Any], state: Dict[str, Any], items: List[str]) -> None:
+    have_before = sum(1 for it in _SOUL_CORE_PIECES if it in state.get("inventory", []))
     for it in items:
         if it not in state["inventory"]:
             state["inventory"].append(it)
+    sort_inventory(game, state)
+    have_after = sum(1 for it in _SOUL_CORE_PIECES if it in state.get("inventory", []))
+    _maybe_play_soul_core_voice(state, have_before, have_after)
 
 
 def remove_items(state: Dict[str, Any], items: List[str]) -> None:
@@ -189,7 +245,7 @@ def assemble_soul_core_breaker(
     remove_items(state, ["soulCoreFrame"])
     if acquired is not None:
         acquired.append("soulCoreBreaker")
-    add_items(state, ["soulCoreBreaker"])
+    add_items(game, state, ["soulCoreBreaker"])
     state["heldItemId"] = "soulCoreBreaker"
     apply_action(game, state, "interact", log)
 
@@ -216,7 +272,7 @@ def try_combination(
                 for gid in res["add"]:
                     if gid not in state["inventory"] and acquired is not None:
                         acquired.append(gid)
-                add_items(state, res["add"])
+                add_items(game, state, res["add"])
             if "remove" in res:
                 remove_items(state, res["remove"])
             if "setFlag" in res:
@@ -241,7 +297,7 @@ def move(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, direction: s
         apply_action(game, state, "interact", log)
         return
     if not can_exit(state, room, direction):
-        log.add("The way is blocked. Some lock—technical or infernal—still holds.", "warn")
+        log.add("The way is blocked. Some lock ... technical or infernal ... still holds.", "warn")
         apply_action(game, state, "interact", log)
         return
     first_time = not state.get("roomIntroShown", {}).get(target, False)
@@ -259,6 +315,16 @@ def move(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, direction: s
             state["pendingRoomPopup"] = target
 
 
+def _next_whistle_line(game: Dict[str, Any], state: Dict[str, Any]) -> str:
+    lines = game.get("whistleLines")
+    if not isinstance(lines, list) or not lines:
+        return "You whistle. The Crucible withholds applause."
+    flags = state.setdefault("flags", {})
+    i = int(flags.get("_whistle_i", 0))
+    flags["_whistle_i"] = i + 1
+    return str(lines[i % len(lines)])
+
+
 def resolve_object_action(
     game: Dict[str, Any],
     state: Dict[str, Any],
@@ -274,13 +340,19 @@ def resolve_object_action(
         if hotspot_kind == "hazard":
             die(game, state, log, game["deaths"]["slime"])
             return
+        if cmd == "whistle":
+            log.add(_next_whistle_line(game, state), "dim")
+            return
         log.add("There's nothing meaningful there. Only ambience and liability.", "warn")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if get_flag(state, "gameWon"):
+        if cmd == "whistle":
+            log.add(_next_whistle_line(game, state), "dim")
+            return
         log.add("The rift is sealed. What remains is cleanup and therapy. Mostly therapy.", "dim")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     handler = obj.get(cmd)
@@ -288,32 +360,35 @@ def resolve_object_action(
         if hotspot_kind == "hazard":
             die(game, state, log, game["deaths"]["slime"])
             return
+        if cmd == "whistle":
+            log.add(_next_whistle_line(game, state), "dim")
+            return
         log.add("That accomplishes nothing. The facility remains unimpressed.", "warn")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if isinstance(handler, str):
         log.add(handler)
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if isinstance(handler, dict) and handler.get("special") == "lindaTerminal":
         state["pendingLindaTerminal"] = True
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if isinstance(handler, dict) and handler.get("special") == "cycleText":
         lines = handler.get("lines")
         if not isinstance(lines, list) or not lines:
             log.add("Static. Whatever answer you wanted isn't on this channel.", "dim")
-            apply_action(game, state, "interact", log)
+            apply_object_interaction_cost(game, state, log, cmd)
             return
         flag_key = str(handler.get("flag") or f"cycle_{state.get('roomId','')}_{obj_id}_{cmd}")
         i = int(state.get("flags", {}).get(flag_key, 0))
         text = str(lines[i % len(lines)])
         log.add(text)
         state.setdefault("flags", {})[flag_key] = i + 1
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     # Death handler (skip when an option list handles branching — e.g. hatch pry vs. pass through)
@@ -345,7 +420,7 @@ def resolve_object_action(
                 set_flag(state, opt["setFlag"], True)
             if opt.get("onceFlag"):
                 set_flag(state, opt["onceFlag"], True)
-            apply_action(game, state, "interact", log)
+            apply_object_interaction_cost(game, state, log, cmd)
             announce_victory_if_won(state, log)
             return
         d = handler.get("default")
@@ -355,13 +430,13 @@ def resolve_object_action(
             if d.get("death"):
                 die(game, state, log, game["deaths"].get(d["death"], "You die."))
             else:
-                apply_action(game, state, "interact", log)
+                apply_object_interaction_cost(game, state, log, cmd)
             return
 
     # Requirements
     if handler.get("requiresItem") and held != handler["requiresItem"]:
         log.add("That doesn't work. You might need a specific item.", "warn")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
     if handler.get("requiresFlag") and not get_flag(state, handler["requiresFlag"]):
         if cmd == "take" and (handler.get("takeFailText") or handler.get("takeFailDeath")):
@@ -370,14 +445,14 @@ def resolve_object_action(
             if handler.get("takeFailDeath"):
                 die(game, state, log, game["deaths"].get(handler["takeFailDeath"], "You die."))
             else:
-                apply_action(game, state, "interact", log)
+                apply_object_interaction_cost(game, state, log, cmd)
             return
         log.add("Something else must happen first.", "warn")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
     if handler.get("onceFlag") and get_flag(state, handler["onceFlag"]):
         log.add("You've already done that. Repetition is a hobby, not a solution.", "dim")
-        apply_action(game, state, "interact", log)
+        apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if handler.get("text"):
@@ -392,7 +467,7 @@ def resolve_object_action(
         for gid in handler["gain"]:
             if gid not in state["inventory"] and acquired is not None:
                 acquired.append(gid)
-        add_items(state, handler["gain"])
+        add_items(game, state, handler["gain"])
 
     add_lan = handler.get("addLanterns")
     if add_lan:
@@ -407,6 +482,6 @@ def resolve_object_action(
     if handler.get("consumeHeld") and held:
         remove_items(state, [held])
 
-    apply_action(game, state, "interact", log)
+    apply_object_interaction_cost(game, state, log, cmd)
     announce_victory_if_won(state, log)
 

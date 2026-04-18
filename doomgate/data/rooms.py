@@ -8,11 +8,11 @@ def build_rooms() -> Dict[str, Any]:
     return {
         "hangar": {
             "id": "hangar",
-            "name": "Hangar Intake — The Crucible Facility",
+            "name": "Hangar Intake ... The Crucible Facility",
             "theme": "hangar",
             "mapPos": [0, 2],
             "mapFloor": 0,
-            "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site—an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
+            "enterText": "You came to Crucible Facility for one reason: Crux.\n\nYour handler said the director was running \"energy research.\" Then the distress beacon went silent, the comms filled with screaming, and the UAC stopped answering.\n\nSomewhere inside is what Crux stole from the dig site... an argent core wrapped in old runes. If you can find it, you can shut this place down. If you can't… Mars gets a new mouth.",
             "desc": "You stand in the hangar intake of the Crucible Facility. UAC steel ribs arch overhead, but the walls are scored with runes that look like they were etched by a knife made of screaming.\n\nA flickering terminal repeats a single line: \"L.I.N.D.A. ONLINE\".\nThe air smells of ozone, blood, and corporate denial.",
             "exits": {"north": "corridor", "east": "security"},
             "hotspots": [
@@ -23,7 +23,7 @@ def build_rooms() -> Dict[str, Any]:
             ],
             "objects": {
                 "terminal": {
-                    "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. You need the Soul-Core Breaker. Three artifacts. Don't be brave—be correct.\"",
+                    "look": "The terminal's text jitters. A voice crawls out of the static: \"Marine. If you're reading this, your squad isn't. Director Crux is in the lower temple. Assemble the Soul-Core Breaker: the frame, then the crystal, the link, and the key... four pieces. Don't be brave... be correct.\"",
                     "talk": "You speak into the mic. The response is immediate.\n\n\"Designation: L.I.N.D.A. Logistical Inference and Neutralization Directive AI. I am... compromised. But helpful. Probably.\"",
                     "use": {"special": "lindaTerminal"},
                 },
@@ -31,9 +31,9 @@ def build_rooms() -> Dict[str, Any]:
                     "look": "A dented supply crate with a UAC latch. Something inside hums politely.",
                     "open": {
                         "onceFlag": "openedCrate",
-                        "gain": ["stimpack"],
+                        "gain": ["plasmaCharger", "stimpack"],
                         "addLanterns": 1,
-                        "text": "You pop the latch. Inside: a spare plasma charger pack and a vial of demon blood. The glass is warm, like it hates you personally.",
+                        "text": "You pop the latch. Inside: a Plasma Charger, a spare plasma pack, and a vial of demon blood. The glass is warm, like it hates you personally.",
                     },
                     "take": {"death": "crateTakeDeath", "text": "You try to take the entire crate. Your back files a formal complaint and resigns."},
                 },
@@ -41,11 +41,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "corridor": {
             "id": "corridor",
-            "name": "Main Corridor — Steel & Sigils",
+            "name": "Main Corridor ... Steel & Sigils",
             "theme": "corridor",
             "mapPos": [1, 2],
             "mapFloor": 0,
-            "enterText": "The facility’s spine is still lit, still humming—like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
+            "enterText": "The facility’s spine is still lit, still humming... like the building refuses to admit it’s dead.\n\nGlyphs crawl over UAC logos in patient, obscene handwriting. This wasn’t an invasion. It was an invitation that got accepted.\n\nL.I.N.D.A. said Crux went down. That means the artifacts went down too. Keep moving.",
             "desc": "A long corridor of brushed metal and bad decisions. Emergency lights pulse red. Demonic glyphs crawl over the UAC logos as if mocking the concept of branding.\n\nTo the north, a blast door leads to the Research Labs. To the east, the Living Quarters stink of old fear.",
             "exits": {"south": "hangar", "north": "labsDoor", "east": "quarters"},
             "hotspots": [
@@ -61,13 +61,13 @@ def build_rooms() -> Dict[str, Any]:
                     "use": {"death": "slime"},
                     "open": {"death": "slime"},
                     "talk": {"death": "slime"},
-                    "close": {"death": "slime"},
+                    "whistle": {"death": "slime"},
                 }
             },
         },
         "security": {
             "id": "security",
-            "name": "Security Checkpoint — Locked Teeth",
+            "name": "Security Checkpoint ... Locked Teeth",
             "theme": "security",
             "mapPos": [0, 3],
             "mapFloor": 0,
@@ -89,11 +89,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "maintenance": {
             "id": "maintenance",
-            "name": "Maintenance Ductworks — The Belly of UAC",
+            "name": "Maintenance Ductworks ... The Belly of UAC",
             "theme": "maintenance",
             "mapPos": [1, 3],
             "mapFloor": 0,
-            "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry—drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
+            "enterText": "The walls sweat. The pipes hiss like they’re trying to warn you without lungs.\n\nSomething moved through here in a hurry... drag marks, scorched handprints, and the sour bite of argent where it shouldn’t be. This is where the facility started bleeding.\n\nIf Crux sealed the excavation hatch, it’s because he didn’t want anyone going down. Or coming up.",
             "desc": "Pipes. Steam. The sound of something large breathing where no lungs should be. A broken panel reveals a power conduit pulsing with argent.\n\nA sealed hatch to the north is marked: EXCAVATION.",
             "exits": {"west": "security", "north": "excavationHatch"},
             "hotspots": [
@@ -111,11 +111,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "labsDoor": {
             "id": "labsDoor",
-            "name": "Research Labs — Blast Door",
+            "name": "Research Labs ... Blast Door",
             "theme": "labsDoor",
             "mapPos": [2, 2],
             "mapFloor": 0,
-            "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols—and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
+            "enterText": "The labs are sealed behind a blast door like the building is trying to quarantine its own curiosity.\n\nThe blood-seal on the keypad isn’t just vandalism. It’s a prayer written by someone who knew the right symbols... and didn’t care who answered.\n\nCrux loved locked doors. He loved what was behind them more.",
             "desc": "A blast door blocks the Research Labs. A demonic seal has been painted over the keypad, like graffiti but with consequences.\n\nThe seal looks... unfinished.",
             "exits": {"south": "corridor", "north": "labs"},
             "rules": {"gateToNorthRequiresFlag": "brokeSeal"},
@@ -134,12 +134,12 @@ def build_rooms() -> Dict[str, Any]:
         },
         "labs": {
             "id": "labs",
-            "name": "Research Labs — Argent Containment",
+            "name": "Research Labs ... Argent Containment",
             "theme": "labs",
             "mapPos": [3, 2],
             "mapFloor": 0,
-            "enterText": "The labs smell like antiseptic and sulfur—cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
-            "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur—like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
+            "enterText": "The labs smell like antiseptic and sulfur... cleanliness layered over corruption.\n\nContainment tubes are cracked from the inside. Not escaped. Hatched.\n\nIf Crux was chasing power, this is where he learned what power costs. The Omega Crystal is here somewhere. Don’t let it choose you.",
+            "desc": "Benches of shattered glassware. Containment tubes cracked from the inside. The smell is antiseptic overlaid with sulfur... like a hospital built inside a volcano.\n\nA pedestal holds something bright. Too bright for this place.",
             "exits": {"south": "labsDoor", "east": "templeLift"},
             "hotspots": [
                 {"id": "toDoor", "name": "Blast Door", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -156,11 +156,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "quarters": {
             "id": "quarters",
-            "name": "Living Quarters — Echoes of Payroll",
+            "name": "Living Quarters ... Echoes of Payroll",
             "theme": "quarters",
             "mapPos": [2, 3],
             "mapFloor": 0,
-            "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol—over and over—like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
+            "enterText": "People tried to live here. That’s the worst part.\n\nBunks are stripped, lockers torn open, and the walls are scratched with the same looping symbol... over and over... like the facility was teaching them a new alphabet.\n\nSomebody hid the Soul-Core Breaker frame in here. They believed in a weapon. Or they believed in you.",
             "desc": "Bunks. Lockers. A poster about workplace safety that has been rewritten in blood. The intercom whispers static prayers.\n\nA cracked wall panel reveals a hidden recess.",
             "exits": {"west": "corridor", "east": "templeLift"},
             "hotspots": [
@@ -192,11 +192,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "templeLift": {
             "id": "templeLift",
-            "name": "Service Lift — Down to the Ruins",
+            "name": "Service Lift ... Down to the Ruins",
             "theme": "lift",
             "mapPos": [3, 3],
             "mapFloor": 0,
-            "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nDOWN lands at the excavation hatch—the last UAC seal before the dig. The breach beyond is not a shortcut. It’s a bill.",
+            "enterText": "The lift is where the facility stops pretending it’s just steel.\n\nBone-white growths crawl over the frame, and the button panel has been reduced to a choice: up, or down.\n\nDOWN lands at the excavation hatch... the last UAC seal before the dig. The breach beyond is not a shortcut. It’s a bill.",
             "desc": "A freight lift fused with bone-white growths. The button panel has only two working lights: UP and DOWN. DOWN is lit like a dare; beneath you is the hatch room, not the pit itself.\n\nA voice crackles: \"The ruins predate Mars. Which is inconvenient for Mars.\"",
             "exits": {"west": "quarters", "east": "labs", "down": "excavationHatch"},
             "hotspots": [
@@ -207,12 +207,12 @@ def build_rooms() -> Dict[str, Any]:
         },
         "excavationHatch": {
             "id": "excavationHatch",
-            "name": "Excavation Hatch — Sealed",
+            "name": "Excavation Hatch ... Sealed",
             "theme": "hatch",
             "mapPos": [2, 4],
             "mapFloor": -1,
-            "enterText": "The hatch is a boundary line—someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
-            "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nThe freight lift opens onto this landing—DOWN from the service deck, UP when you need to breathe facility air again.\n\nA biometric lock blinks an angry red.",
+            "enterText": "The hatch is a boundary line... someone’s last attempt to draw “outside” and “inside” with a piece of steel.\n\nClaw marks gouge the frame from below. Whatever wanted out was strong. Whatever kept it in was desperate.\n\nIf you open this, you are choosing a direction for the whole story.",
+            "desc": "A heavy hatch marked EXCAVATION. Claw marks score the frame from the inside.\n\nThe freight lift opens onto this landing... DOWN from the service deck, UP when you need to breathe facility air again.\n\nA biometric lock blinks an angry red.",
             "exits": {"south": "maintenance", "north": "excavation", "up": "templeLift"},
             "rules": {"gateToNorthRequiresFlag": "openedHatch"},
             "hotspots": [
@@ -233,12 +233,12 @@ def build_rooms() -> Dict[str, Any]:
         },
         "excavation": {
             "id": "excavation",
-            "name": "Excavation Site — Temple Breach",
+            "name": "Excavation Site ... Temple Breach",
             "theme": "excavation",
             "mapPos": [3, 4],
             "mapFloor": -1,
-            "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link—an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
-            "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nStone stairs climb north toward the hell-gate threshold—there is no other way up from the dig.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
+            "enterText": "The dig site is where UAC broke the world on purpose.\n\nFloodlights glare into a wound cut through ancient stone. The air tastes like dust and ritual.\n\nSomewhere down here is the Neural Link... an AI core that shouldn’t exist, too clean to be old and too old to be clean. Crux kept it close. Like a confession.",
+            "desc": "A vast pit where UAC dug into ancient black stone. Floodlights illuminate a demonic arch half-buried in dust. A Hell Knight stalks the edge, guarding something that glints near the altar.\n\nStone stairs climb north toward the hell-gate threshold... there is no other way up from the dig.\n\nYour rifle feels suddenly inadequate in the philosophical sense.",
             "exits": {"south": "excavationHatch", "north": "hellGateAntechamber"},
             "hotspots": [
                 {"id": "toHatch", "name": "Hatch", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -273,12 +273,12 @@ def build_rooms() -> Dict[str, Any]:
         },
         "hellGateAntechamber": {
             "id": "hellGateAntechamber",
-            "name": "Hell-Gate Antechamber — The Threshold",
+            "name": "Hell-Gate Antechamber ... The Threshold",
             "theme": "antechamber",
             "mapPos": [4, 4],
             "mapFloor": -1,
-            "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out—it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
-            "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nSouth, the stone stairs return only to the excavation pit—the serpent threshold is never a lift ride away from the dig.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
+            "enterText": "This is the point of no return, dressed up as architecture.\n\nUAC plating tries to cover the old stone, but the stone remembers. The door ahead is not locked to keep you out... it's locked to keep something in.\n\nThe Serpentine Key will open it. The question is what you’re opening it *for*.",
+            "desc": "An antechamber where UAC plating overlays ancient stone. A massive demonic door stands to the north, its lock shaped like a coiled serpent.\n\nSouth, the stone stairs return only to the excavation pit... the serpent threshold is never a lift ride away from the dig.\n\nYou can hear a distant heartbeat that isn't yours. Or Mars's.",
             "exits": {"south": "excavation", "north": "hellGateChamber"},
             "rules": {"gateToNorthRequiresFlag": "unlockedGate"},
             "hotspots": [
@@ -295,11 +295,11 @@ def build_rooms() -> Dict[str, Any]:
         },
         "armory": {
             "id": "armory",
-            "name": "Armory Annex — Old Toys",
+            "name": "Armory Annex ... Old Toys",
             "theme": "armory",
             "mapPos": [1, 4],
             "mapFloor": 0,
-            "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong—too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
+            "enterText": "The armory isn't empty. It's been harvested.\n\nThe lock marks are wrong... too hot, too clean, like something opened steel with a thought. Crux didn't just invite hell in. He gave it a supply room.",
             "desc": "A small armory annex. Most racks are empty. A reinforced weapons locker sits behind a red-lit keypad. One display case remains intact, holding a demonic-metal key that pulses like a living bruise.\n\nThe case has a UAC warning label: DO NOT OPEN. As if that ever worked.",
             "exits": {"south": "security"},
             "hotspots": [
@@ -309,7 +309,7 @@ def build_rooms() -> Dict[str, Any]:
             ],
             "objects": {
                 "case": {
-                    "look": "A sealed display case. The lock is simple—because the real lock is probably the curse.",
+                    "look": "A sealed display case. The lock is simple... because the real lock is probably the curse.",
                     "open": {"requiresItem": "redKeycard", "onceFlag": "openedCase", "gain": ["serpentineKey"], "text": "You pop the case. Cold air spills out. You take the Serpentine Key. The warning label silently updates to: TOLD YOU."},
                     "use": {"death": "glassKills", "text": "You smash the glass with your elbow. The glass explodes outward and inward. Physics is also possessed."},
                 },
@@ -322,12 +322,12 @@ def build_rooms() -> Dict[str, Any]:
         },
         "hellGateChamber": {
             "id": "hellGateChamber",
-            "name": "Hell-Gate Chamber — The Crucible",
+            "name": "Hell-Gate Chamber ... The Crucible",
             "theme": "hellgate",
             "mapPos": [4, 3],
             "mapFloor": 1,
-            "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out—before the Titan decides you’re interesting.",
-            "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity—robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
+            "enterText": "The heart of the facility. The throat of the rift.\n\nCrux didn’t lose control. He traded it. The air vibrates with a contract written in heat and teeth.\n\nIf you built the Soul-Core Breaker for any reason, it was for this moment. End the rift. End Crux. Then get out... before the Titan decides you’re interesting.",
+            "desc": "The chamber is half factory, half cathedral. A rift churns at the far end, vomiting heat and whispers. Director Malcom Crux stands before it, fused with a demonic entity... robes made of cables, horns made of ambition.\n\nAbove the rift, a Titan-class silhouette presses against reality like a hand against thin ice.",
             "exits": {"south": "hellGateAntechamber"},
             "hotspots": [
                 {"id": "toAnte", "name": "Antechamber", "rect": {"l": 10, "t": 34, "w": 18, "h": 28}, "kind": "exit", "data": {"dir": "south"}},
@@ -335,11 +335,11 @@ def build_rooms() -> Dict[str, Any]:
                 {"id": "rift", "name": "Hell Rift", "rect": {"l": 74, "t": 26, "w": 18, "h": 40}, "kind": "hazard"},
             ],
             "objects": {
-                "rift": {"look": "A wound in the world. It bleeds light and laughter.", "use": {"death": "riftTouch"}, "take": {"death": "riftTouch"}, "open": {"death": "riftTouch"}, "talk": {"death": "riftTouch"}, "close": {"death": "riftTouch"}},
+                "rift": {"look": "A wound in the world. It bleeds light and laughter.", "use": {"death": "riftTouch"}, "take": {"death": "riftTouch"}, "open": {"death": "riftTouch"}, "talk": {"death": "riftTouch"}, "whistle": {"death": "riftTouch"}},
                 "crux": {
                     "look": "Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
                     "talk": "\"Marine,\" Crux purrs, voice doubled with something older. \"You are late. But late is still on time for sacrifice.\"",
-                    "use": {"options": [{"requiresItem": "soulCoreBreaker", "text": "You raise the Soul-Core Breaker. It screams—not in pain, but in joy. A beam of inverted helllight lances into the rift.\n\nThe Titan howls as reality clamps down like a jaw. Crux's fused form spasms, then is dragged backward, clawing at the air like a man trying to keep his job.\n\nA voice whispers: \"Seal achieved. Please evacuate. Or don't. I'm not your mother.\"", "setFlag": "gameWon"}], "default": {"death": "cruxKills", "text": "You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head."}},
+                    "use": {"options": [{"requiresItem": "soulCoreBreaker", "text": "You raise the Soul-Core Breaker. It screams... not in pain, but in joy. A beam of inverted helllight lances into the rift.\n\nThe Titan howls as reality clamps down like a jaw. Crux's fused form spasms, then is dragged backward, clawing at the air like a man trying to keep his job.\n\nA voice whispers: \"Seal achieved. Please evacuate. Or don't. I'm not your mother.\"", "setFlag": "gameWon"}], "default": {"death": "cruxKills", "text": "You attempt an unassisted solution to an apocalyptic problem. Crux appreciates the comedy before removing your head."}},
                 },
             },
         },

@@ -21,7 +21,7 @@ A **title screen** appears first: press **any key** or **click** (“Press Any K
 
 ## Controls (mouse-only)
 
-- Click a **command** (LOOK / TAKE / USE / TALK / OPEN / CLOSE / SAVE / LOAD)
+- Click a **command** (LOOK / TAKE / USE / TALK / OPEN / WHISTLE / SAVE / LOAD)
 - Click hotspots in the **viewport** to apply that command
 - Click inventory items to hold them (for USE / OPEN logic and item combinations)
 - **Scroll the text log** with the mouse wheel (or drag the scrollbar)
