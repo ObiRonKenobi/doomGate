@@ -7,19 +7,6 @@ _ACTIONS_PER_LANTERN = 15
 _INITIAL_LANTERN_CHARGES = 3
 _LANTERN_MAX_CARRY = 5
 
-_WHISTLE_LINES = [
-    "You whistle a tune you half-remember from boot camp. The facility doesn't sing along.",
-    "You whistle sharp... like you're calling a dog. Nothing loyal answers. Something hungry might be listening.",
-    "You whistle through your teeth. Your HUD annotates it as \"morale: theoretical.\"",
-    "You whistle off-key on purpose. Even chaos here has standards; it declines to applaud.",
-    "You whistle while you work. Shadowgate didn't survive on optimism, but it helps the hallway ego.",
-    "You try a wolf whistle. The UAC logo doesn't blush. The glyphs do... which is worse.",
-    "You whistle low and steady, like checking a mineshaft for bad ideas. The silence negotiates.",
-    "You whistle the way people whistle past graveyards. This graveyard whistles back, briefly, then pretends it didn't.",
-    "You whistle for a pickup. The only thing that arrives is self-awareness.",
-    "You whistle a victory fanfare early. The Crucible files it under \"premature\" and moves on.",
-]
-
 
 def make_game_core() -> Dict[str, Any]:
     """
@@ -45,7 +32,7 @@ def make_game_core() -> Dict[str, Any]:
             {"id": "use", "label": "USE"},
             {"id": "talk", "label": "TALK"},
             {"id": "open", "label": "OPEN"},
-            {"id": "whistle", "label": "WHISTLE"},
+            {"id": "combine", "label": "COMBINE"},
             {"id": "save", "label": "SAVE"},
             {"id": "load", "label": "LOAD"},
         ],
@@ -65,6 +52,8 @@ def make_game_core() -> Dict[str, Any]:
             "conduitFry": "Argent isn't household current. It rides your arm to the shoulder, cooks what it touches, and leaves a marine-shaped outline of bad judgment. The conduit snaps dark again... business as usual.",
             "crystalFlash": "You press in close for a 'better look.' The Omega Crystal answers with a containment flash that goes through your visor and out the back of your thoughts. Your suit logs one heartbeat, then static.",
             "riftTouch": "The wound in the world inhales curiosity. You come apart so cleanly there isn't even time for a clever last word... only scatter, then silence, where something else learns your name.",
+            "cellFrameFlash": "You try to COMBINE the BFG cell with the Soul-Core frame. The frame accepts the offer like a hungry mouth accepts a hand.\n\nBlue-white light punches through your visor. Your HUD fills with warnings, then gives up. For a moment you can smell your own thoughts burning.\n\nThe last thing you hear is L.I.N.D.A. calmly logging: \"User attempted cross-platform power delivery.\"",
+            "cellBreakerBackfire": "You COMBINE the BFG cell with the Soul-Core Breaker. The Breaker purrs.\n\nThen it decides the most efficient way to say \"no\" is to subtract you from the room.\n\nThe demons do not clap. They simply step around what is left of your ambition.",
         },
         "items": {
             "plasmaCharger": {
@@ -160,7 +149,6 @@ def make_game_core() -> Dict[str, Any]:
             "badonks": {"action": "minigame_invaders"},
             "rbyt3r": {"action": "god_mode"},
         },
-        "whistleLines": list(_WHISTLE_LINES),
         "manualText": "\n".join(
             [
                 "WELCOME TO DOOMGATE: THE WARLOCK'S CRUCIBLE",
@@ -168,14 +156,15 @@ def make_game_core() -> Dict[str, Any]:
                 "This is a mouse-driven, Shadowgate-style adventure.",
                 "",
                 "HOW TO PLAY",
-                "- Click a COMMAND (LOOK/TAKE/USE/TALK/OPEN/WHISTLE).",
+                "- Click a COMMAND (LOOK/TAKE/USE/TALK/OPEN/COMBINE).",
                 "- Click objects in the viewport to apply the command.",
                 "- Doors and exits: select USE, then click the door/passage to move.",
                 "- Click an INVENTORY item to hold it (for USE, OPEN, etc.).",
+                "- To craft/charge/build things: select COMBINE, then click two inventory items.",
                 "- Use SAVE/LOAD often. Many actions can kill you instantly.",
                 "",
                 "PLASMA ORB + CHARGERS (MANUAL DRAIN)",
-                "- LOOK and WHISTLE do not drain the plasma orb meter (WHISTLE is flavor... unless something listens).",
+                "- LOOK does not drain the plasma orb meter.",
                 "- Other commands (TAKE/USE/TALK/OPEN, failed attempts, etc.) drain the orb.",
                 f"- The orb holds {_ACTIONS_PER_LANTERN} actions when full.",
                 f"- You start with {_INITIAL_LANTERN_CHARGES} charger packs (max {_LANTERN_MAX_CARRY}).",

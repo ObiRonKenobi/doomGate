@@ -21,9 +21,10 @@ A **title screen** appears first: press **any key** or **click** (“Press Any K
 
 ## Controls (mouse-only)
 
-- Click a **command** (LOOK / TAKE / USE / TALK / OPEN / WHISTLE / SAVE / LOAD)
+- Click a **command** (LOOK / TAKE / USE / TALK / OPEN / COMBINE / SAVE / LOAD)
 - Click hotspots in the **viewport** to apply that command
-- Click inventory items to hold them (for USE / OPEN logic and item combinations)
+- Click inventory items to hold them (for USE / OPEN logic)
+- To craft/charge/build things: select **COMBINE**, then click two inventory items
 - **Scroll the text log** with the mouse wheel (or drag the scrollbar)
 - **F3** toggles **hotspot debug** overlays (use to line up doors with your room PNGs)
 - The window is **resizable / maximizable**; the layout reflows to fit

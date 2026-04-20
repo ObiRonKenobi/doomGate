@@ -205,6 +205,19 @@ def save_audio_settings(settings: Dict[str, Any]) -> None:
 
     _save(settings)
 
+def _combinable_item_ids() -> set[str]:
+    out: set[str] = set()
+    for c in GAME.get("combinations", []):
+        if not isinstance(c, dict):
+            continue
+        a = c.get("a")
+        b = c.get("b")
+        if isinstance(a, str) and a:
+            out.add(a)
+        if isinstance(b, str) and b:
+            out.add(b)
+    return out
+
 
 MUSIC_VOL_HOVER_DELAY_MS = 1000
 
@@ -304,7 +317,6 @@ _ROOMS_LEGACY = {
                 "use": {"death": "slime"},
                 "open": {"death": "slime"},
                 "talk": {"death": "slime"},
-                "whistle": {"death": "slime"},
             }
         },
     },
@@ -606,7 +618,6 @@ _ROOMS_LEGACY = {
                 "take": {"death": "riftTouch"},
                 "open": {"death": "riftTouch"},
                 "talk": {"death": "riftTouch"},
-                "whistle": {"death": "riftTouch"},
             },
             "crux": {
                 "look": "Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
@@ -2147,6 +2158,7 @@ def run() -> int:
         inv_rect = layout_state["inv_rect"]
         draw_box(screen, inv_rect, "Inventory")
         items = state["inventory"]
+        combinable = _combinable_item_ids() if current_cmd() == "combine" else set()
         area = pygame.Rect(inv_rect.x + 10, inv_rect.y + 30, inv_rect.w - 20, inv_rect.h - 40)
         pad_x = 8
         pad_y = 6
@@ -2212,8 +2224,14 @@ def run() -> int:
                     inv_buttons.append((iid, rect))
                     if rect.colliderect(area):
                         selected = state.get("heldItemId") == iid
+                        is_combinable = iid in combinable
                         bg = (18, 34, 26) if selected else (10, 14, 12)
-                        border = colors["accent"] if selected else colors["border"]
+                        if selected:
+                            border = colors["accent"]
+                        elif is_combinable:
+                            border = (150, 210, 255)
+                        else:
+                            border = colors["border"]
                         pygame.draw.rect(screen, bg, rect, border_radius=8)
                         pygame.draw.rect(screen, border, rect, 1, border_radius=8)
                         ly = rect.y + pad_y
@@ -2621,7 +2639,7 @@ def run() -> int:
         if hs["kind"] == "exit":
             if cmd != "use":
                 log.add("Select USE, then click the door or passage to go through. No free movement... this is an adventure game.", "warn")
-                apply_action(state, "look" if cmd in {"look", "whistle"} else "interact", log)
+                apply_action(state, "look" if cmd == "look" else "interact", log)
                 return
             move(state, log, hs["data"]["dir"])
             return
@@ -3557,17 +3575,17 @@ def run() -> int:
                             if not state["alive"]:
                                 break
                             acquired_inv: List[str] = []
-                            if state["cmd"] == "use" and state.get("heldItemId") and state["heldItemId"] != iid:
+                            if state["cmd"] == "combine" and state.get("heldItemId") and state["heldItemId"] != iid:
                                 ok = try_combination(state, log, state["heldItemId"], iid, acquired=acquired_inv)
                                 for gid in acquired_inv:
                                     item_popup_queue.append(gid)
                                 if acquired_inv:
                                     bump_portrait_excited()
                                 if not ok:
-                                    log.add("Those items refuse to cooperate. Probably for ethical reasons.", "warn")
+                                    log.add("Those items do not fit together.", "warn")
                                     apply_action(state, "interact", log)
                                 break
-                            if state["cmd"] == "use" and state.get("heldItemId") == iid:
+                            if state["cmd"] == "combine" and state.get("heldItemId") == iid:
                                 if iid == "soulCoreFrame":
                                     had_breaker = has_item(state, "soulCoreBreaker")
                                     try_combination(state, log, iid, iid, acquired=acquired_inv)

@@ -61,7 +61,6 @@ def build_rooms() -> Dict[str, Any]:
                     "use": {"death": "slime"},
                     "open": {"death": "slime"},
                     "talk": {"death": "slime"},
-                    "whistle": {"death": "slime"},
                 }
             },
         },
@@ -335,7 +334,7 @@ def build_rooms() -> Dict[str, Any]:
                 {"id": "rift", "name": "Hell Rift", "rect": {"l": 74, "t": 26, "w": 18, "h": 40}, "kind": "hazard"},
             ],
             "objects": {
-                "rift": {"look": "A wound in the world. It bleeds light and laughter.", "use": {"death": "riftTouch"}, "take": {"death": "riftTouch"}, "open": {"death": "riftTouch"}, "talk": {"death": "riftTouch"}, "whistle": {"death": "riftTouch"}},
+                "rift": {"look": "A wound in the world. It bleeds light and laughter.", "use": {"death": "riftTouch"}, "take": {"death": "riftTouch"}, "open": {"death": "riftTouch"}, "talk": {"death": "riftTouch"}},
                 "crux": {
                     "look": "Crux's face is still there, somewhere under the demonic growth. His eyes burn with executive certainty.",
                     "talk": "\"Marine,\" Crux purrs, voice doubled with something older. \"You are late. But late is still on time for sacrifice.\"",

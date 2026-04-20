@@ -14,7 +14,12 @@ OPEN target: command OPEN, then click.
 
 TAKE target: command TAKE, then click.
 
-COMBINE A + B: HOLD A, command USE, click B in the inventory list.
+COMBINE A + B: command COMBINE, then click A and B in the inventory (either order).
+COMBINE A + A: command COMBINE, then click the same item twice.
+
+NOTE: As of the COMBINE update, item crafting is no longer done with USE.
+COMBINE A + B: command COMBINE, then click A and B in the inventory (either order).
+COMBINE A + A: command COMBINE, then click the same item twice (used to finalize the Soul-Core Breaker).
 
 
 

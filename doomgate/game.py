@@ -49,8 +49,8 @@ def merge_loaded_save(game: Dict[str, Any], loaded: Dict[str, Any]) -> Dict[str,
     """Merge a JSON-loaded dict onto defaults and normalize plasma/charger fields."""
     base = default_state(game)
     base.update(loaded)
-    if base.get("cmd") == "close":
-        base["cmd"] = "whistle"
+    if base.get("cmd") in {"close", "whistle"}:
+        base["cmd"] = "look"
     base.setdefault("flags", {})
     base.setdefault("seenRooms", {})
     base.setdefault("roomIntroShown", {})
@@ -135,8 +135,8 @@ def action_cost(kind: str) -> int:
 
 
 def apply_object_interaction_cost(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, cmd: str) -> None:
-    """Spend plasma for hotspot/object interactions; LOOK and WHISTLE do not drain the orb."""
-    apply_action(game, state, "look" if cmd in {"look", "whistle"} else "interact", log)
+    """Spend plasma for hotspot/object interactions; LOOK does not drain the orb."""
+    apply_action(game, state, "look" if cmd == "look" else "interact", log)
 
 
 def die(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, text: str) -> None:
@@ -259,6 +259,22 @@ def try_combination(
     acquired: Optional[List[str]] = None,
 ) -> bool:
     x, y = (a, b) if a <= b else (b, a)
+
+    # A few "wrong" combinations are interesting enough to be lethal.
+    death_key = None
+    if {x, y} == {"plasmaCell", "soulCoreFrame"}:
+        death_key = "cellFrameFlash"
+    elif {x, y} == {"plasmaCell", "soulCoreBreaker"}:
+        death_key = "cellBreakerBackfire"
+    if death_key:
+        die(
+            game,
+            state,
+            log,
+            game["deaths"].get(death_key, "You die in a way that is educational to everyone except you."),
+        )
+        return True
+
     for c in game["combinations"]:
         ca, cb = (c["a"], c["b"]) if c["a"] <= c["b"] else (c["b"], c["a"])
         if ca == x and cb == y:
@@ -315,16 +331,6 @@ def move(game: Dict[str, Any], state: Dict[str, Any], log: LogLike, direction: s
             state["pendingRoomPopup"] = target
 
 
-def _next_whistle_line(game: Dict[str, Any], state: Dict[str, Any]) -> str:
-    lines = game.get("whistleLines")
-    if not isinstance(lines, list) or not lines:
-        return "You whistle. The Crucible withholds applause."
-    flags = state.setdefault("flags", {})
-    i = int(flags.get("_whistle_i", 0))
-    flags["_whistle_i"] = i + 1
-    return str(lines[i % len(lines)])
-
-
 def resolve_object_action(
     game: Dict[str, Any],
     state: Dict[str, Any],
@@ -340,17 +346,11 @@ def resolve_object_action(
         if hotspot_kind == "hazard":
             die(game, state, log, game["deaths"]["slime"])
             return
-        if cmd == "whistle":
-            log.add(_next_whistle_line(game, state), "dim")
-            return
         log.add("There's nothing meaningful there. Only ambience and liability.", "warn")
         apply_object_interaction_cost(game, state, log, cmd)
         return
 
     if get_flag(state, "gameWon"):
-        if cmd == "whistle":
-            log.add(_next_whistle_line(game, state), "dim")
-            return
         log.add("The rift is sealed. What remains is cleanup and therapy. Mostly therapy.", "dim")
         apply_object_interaction_cost(game, state, log, cmd)
         return
@@ -359,9 +359,6 @@ def resolve_object_action(
     if handler is None:
         if hotspot_kind == "hazard":
             die(game, state, log, game["deaths"]["slime"])
-            return
-        if cmd == "whistle":
-            log.add(_next_whistle_line(game, state), "dim")
             return
         log.add("That accomplishes nothing. The facility remains unimpressed.", "warn")
         apply_object_interaction_cost(game, state, log, cmd)
